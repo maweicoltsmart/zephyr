@@ -29,10 +29,13 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <errno.h>
+#include <zephyr.h>
+#include <kernel.h>
+#include <time.h>
+#include <unistd.h>
 #include <pthread.h>
-#include <signal.h>
+#include <semaphore.h>
 
 /* size of stack area used by each thread */
 #define STACKSIZE 1024
@@ -57,7 +60,7 @@ static USHORT   usRegInputStart = REG_INPUT_START;
 static USHORT   usRegInputBuf[REG_INPUT_NREGS];
 static USHORT   usRegHoldingStart = REG_HOLDING_START;
 static USHORT   usRegHoldingBuf[REG_HOLDING_NREGS];
-static pthread_mutex_t xLock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t xLock;
 static enum ThreadState
 {
     STOPPED,
@@ -78,7 +81,7 @@ void modbus_tcp( void )
     int             iExitCode;
     CHAR           cCh;
     BOOL            bDoExit;
-    int argc, char *argv[]
+    //int argc;char *argv[3] = {NULL};
 
     if( eMBTCPInit( MB_TCP_PORT_USE_DEFAULT ) != MB_ENOERR )
     {
@@ -153,7 +156,7 @@ void modbus_tcp( void )
         ( void )eMBClose(  );
         iExitCode = EXIT_SUCCESS;
     }
-    return iExitCode;
+    return ;//iExitCode;
 }
 
 BOOL

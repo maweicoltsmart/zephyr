@@ -37,14 +37,12 @@
  ***********************************************************/
 
 #include <stdio.h>
-#include <sys/types.h>
-#include <sys/socket.h>
 #include <string.h>
-#include <netinet/in.h>
+#include <net/socket.h>
 #include <unistd.h>
 #include <errno.h>
-#include <time.h>
-
+#include <zephyr.h>
+#include <kernel.h>
 #include "port.h"
 
 /* ----------------------- Modbus includes ----------------------------------*/

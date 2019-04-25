@@ -4,6 +4,8 @@ cmake_minimum_required(VERSION 3.13.1)
 include($ENV{ZEPHYR_BASE}/cmake/app/boilerplate.cmake NO_POLICY_SCOPE)
 project(stm32f407_dtu)
 
+target_include_directories(app PRIVATE $ENV{ZEPHYR_BASE}/include/posix)
+
 include_directories(src/freemodbus/modbus/include)
 include_directories(src/freemodbus/modbus/ascii)
 include_directories(src/freemodbus/modbus/functions)
@@ -25,5 +27,9 @@ target_sources(app PRIVATE src/freemodbus/modbus/functions/mbutils.c)
 target_sources(app PRIVATE src/freemodbus/modbus/rtu/mbcrc.c)
 target_sources(app PRIVATE src/freemodbus/modbus/rtu/mbrtu.c)
 target_sources(app PRIVATE src/freemodbus/modbus/tcp/mbtcp.c)
+target_sources(app PRIVATE src/freemodbus/demo/ZEPHYRTCP/demo_tcp.c)
+target_sources(app PRIVATE src/freemodbus/demo/ZEPHYRTCP/port/portevent.c)
+target_sources(app PRIVATE src/freemodbus/demo/ZEPHYRTCP/port/portother.c)
+target_sources(app PRIVATE src/freemodbus/demo/ZEPHYRTCP/port/porttcp.c)
 
 

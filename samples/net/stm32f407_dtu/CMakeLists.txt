@@ -2,7 +2,28 @@
 
 cmake_minimum_required(VERSION 3.13.1)
 include($ENV{ZEPHYR_BASE}/cmake/app/boilerplate.cmake NO_POLICY_SCOPE)
-project(dhcpv4_client)
+project(stm32f407_dtu)
 
-FILE(GLOB app_sources src/*.c)
-target_sources(app PRIVATE ${app_sources})
+include_directories(src/freemodbus/modbus/include)
+include_directories(src/freemodbus/modbus/ascii)
+include_directories(src/freemodbus/modbus/functions)
+include_directories(src/freemodbus/modbus/rtu)
+include_directories(src/freemodbus/modbus/tcp)
+include_directories(src/freemodbus/demo/ZEPHYR/port)
+include_directories(src/freemodbus/demo/ZEPHYRTCP/port)
+
+target_sources(app PRIVATE src/main.c)
+target_sources(app PRIVATE src/freemodbus/modbus/mb.c)
+target_sources(app PRIVATE src/freemodbus/modbus/ascii/mbascii.c)
+target_sources(app PRIVATE src/freemodbus/modbus/functions/mbfunccoils.c)
+target_sources(app PRIVATE src/freemodbus/modbus/functions/mbfuncdiag.c)
+target_sources(app PRIVATE src/freemodbus/modbus/functions/mbfuncdisc.c)
+target_sources(app PRIVATE src/freemodbus/modbus/functions/mbfuncholding.c)
+target_sources(app PRIVATE src/freemodbus/modbus/functions/mbfuncinput.c)
+target_sources(app PRIVATE src/freemodbus/modbus/functions/mbfuncother.c)
+target_sources(app PRIVATE src/freemodbus/modbus/functions/mbutils.c)
+target_sources(app PRIVATE src/freemodbus/modbus/rtu/mbcrc.c)
+target_sources(app PRIVATE src/freemodbus/modbus/rtu/mbrtu.c)
+target_sources(app PRIVATE src/freemodbus/modbus/tcp/mbtcp.c)
+
+

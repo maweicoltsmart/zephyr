@@ -21,7 +21,12 @@
 
 /* ----------------------- Standard includes --------------------------------*/
 #include <stdlib.h>
-#include <sys/time.h>
+#include <zephyr.h>
+#include <kernel.h>
+#include <time.h>
+#include <unistd.h>
+#include <pthread.h>
+#include <semaphore.h>
 
 #include "port.h"
 

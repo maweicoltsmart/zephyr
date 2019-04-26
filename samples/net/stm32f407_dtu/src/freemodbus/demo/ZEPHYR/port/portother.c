@@ -40,7 +40,7 @@
 /* ----------------------- Static variables ---------------------------------*/
 static FILE    *fLogFile = NULL;
 static eMBPortLogLevel eLevelMax = MB_LOG_DEBUG;
-static pthread_mutex_t xLock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t xLock;
 
 /* ----------------------- Start implementation -----------------------------*/
 void

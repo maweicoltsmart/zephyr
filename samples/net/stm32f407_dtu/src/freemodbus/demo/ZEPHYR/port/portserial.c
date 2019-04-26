@@ -24,12 +24,13 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/select.h>
-#include <fcntl.h>
-#include <termios.h>
+#include <zephyr.h>
+#include <kernel.h>
+#include <time.h>
 #include <unistd.h>
+#include <pthread.h>
+#include <semaphore.h>
+#include <uart.h>
 
 #include "port.h"
 
@@ -39,6 +40,8 @@
 #include "mbconfig.h"
 
 /* ----------------------- Defines  -----------------------------------------*/
+#define UART_DEVICE_NAME    "UART_1"
+
 #if MB_ASCII_ENABLED == 1
 #define BUF_SIZE    513         /* must hold a complete ASCII frame. */
 #else
@@ -46,7 +49,6 @@
 #endif
 
 /* ----------------------- Static variables ---------------------------------*/
-static int      iSerialFd = -1;
 static BOOL     bRxEnabled;
 static BOOL     bTxEnabled;
 
@@ -55,12 +57,9 @@ static UCHAR    ucBuffer[BUF_SIZE];
 static int      uiRxBufferPos;
 static int      uiTxBufferPos;
 
-static struct termios xOldTIO;
-
 /* ----------------------- Function prototypes ------------------------------*/
-static BOOL     prvbMBPortSerialRead( UCHAR * pucBuffer, USHORT usNBytes, USHORT * usNBytesRead );
 static BOOL     prvbMBPortSerialWrite( UCHAR * pucBuffer, USHORT usNBytes );
-
+struct device *uart_dev = NULL;
 /* ----------------------- Begin implementation -----------------------------*/
 void
 vMBPortSerialEnable( BOOL bEnableRx, BOOL bEnableTx )
@@ -70,7 +69,7 @@ vMBPortSerialEnable( BOOL bEnableRx, BOOL bEnableTx )
 
     if( bEnableRx )
     {
-        ( void )tcflush( iSerialFd, TCIFLUSH );
+        //( void )tcflush( iSerialFd, TCIFLUSH );
         uiRxBufferPos = 0;
         bRxEnabled = TRUE;
     }
@@ -89,102 +88,42 @@ vMBPortSerialEnable( BOOL bEnableRx, BOOL bEnableTx )
     }
 }
 
+static void uart_fifo_callback(struct device *dev)
+{
+    /* Verify uart_irq_update() */
+    if (!uart_irq_update(dev)) {
+        //TC_PRINT("retval should always be 1\n");
+        return;
+    }
+
+    /* Verify uart_irq_tx_ready() */
+    /* Note that TX IRQ may be disabled, but uart_irq_tx_ready() may
+     * still return true when ISR is called for another UART interrupt,
+     * hence additional check for i < DATA_SIZE.
+     */
+    if (uart_irq_tx_ready(dev)) {
+
+        uart_irq_tx_disable(dev);
+    }
+
+    /* Verify uart_irq_rx_ready() */
+    if (uart_irq_rx_ready(dev)) {
+        //TC_PRINT("%c", recvData);
+    }
+}
+
 BOOL
 xMBPortSerialInit( UCHAR ucPort, ULONG ulBaudRate, UCHAR ucDataBits, eMBParity eParity )
 {
-    CHAR            szDevice[16];
-    BOOL            bStatus = TRUE;
+    uart_dev = device_get_binding(UART_DEVICE_NAME);
 
-    struct termios  xNewTIO;
-    speed_t         xNewSpeed;
+    /* Verify uart_irq_callback_set() */
+    uart_irq_callback_set(uart_dev, uart_fifo_callback);
 
-    snprintf( szDevice, 16, "/dev/ttyS%d", ucPort );
-
-    if( ( iSerialFd = open( szDevice, O_RDWR | O_NOCTTY ) ) < 0 )
-    {
-        vMBPortLog( MB_LOG_ERROR, "SER-INIT", "Can't open serial port %s: %s\n", szDevice,
-                    strerror( errno ) );
-    }
-    else if( tcgetattr( iSerialFd, &xOldTIO ) != 0 )
-    {
-        vMBPortLog( MB_LOG_ERROR, "SER-INIT", "Can't get settings from port %s: %s\n", szDevice,
-                    strerror( errno ) );
-    }
-    else
-    {
-        bzero( &xNewTIO, sizeof( struct termios ) );
-
-        xNewTIO.c_iflag |= IGNBRK | INPCK;
-        xNewTIO.c_cflag |= CREAD | CLOCAL;
-        switch ( eParity )
-        {
-        case MB_PAR_NONE:
-            break;
-        case MB_PAR_EVEN:
-            xNewTIO.c_cflag |= PARENB;
-            break;
-        case MB_PAR_ODD:
-            xNewTIO.c_cflag |= PARENB | PARODD;
-            break;
-        default:
-            bStatus = FALSE;
-        }
-        switch ( ucDataBits )
-        {
-        case 8:
-            xNewTIO.c_cflag |= CS8;
-            break;
-        case 7:
-            xNewTIO.c_cflag |= CS7;
-            break;
-        default:
-            bStatus = FALSE;
-        }
-        switch ( ulBaudRate )
-        {
-        case 9600:
-            xNewSpeed = B9600;
-            break;
-        case 19200:
-            xNewSpeed = B19200;
-            break;
-        case 38400:
-            xNewSpeed = B38400;
-            break;
-        case 57600:
-            xNewSpeed = B57600;
-            break;
-        case 115200:
-            xNewSpeed = B115200;
-            break;
-        default:
-            bStatus = FALSE;
-        }
-        if( bStatus )
-        {
-            if( cfsetispeed( &xNewTIO, xNewSpeed ) != 0 )
-            {
-                vMBPortLog( MB_LOG_ERROR, "SER-INIT", "Can't set baud rate %ld for port %s: %s\n",
-                            ulBaudRate, strerror( errno ) );
-            }
-            else if( cfsetospeed( &xNewTIO, xNewSpeed ) != 0 )
-            {
-                vMBPortLog( MB_LOG_ERROR, "SER-INIT", "Can't set baud rate %ld for port %s: %s\n",
-                            ulBaudRate, szDevice, strerror( errno ) );
-            }
-            else if( tcsetattr( iSerialFd, TCSANOW, &xNewTIO ) != 0 )
-            {
-                vMBPortLog( MB_LOG_ERROR, "SER-INIT", "Can't set settings for port %s: %s\n",
-                            szDevice, strerror( errno ) );
-            }
-            else
-            {
-                vMBPortSerialEnable( FALSE, FALSE );
-                bStatus = TRUE;
-            }
-        }
-    }
-    return bStatus;
+    /* Enable Tx/Rx interrupt before using fifo */
+    /* Verify uart_irq_rx_enable() */
+    uart_irq_rx_enable(uart_dev);
+    return TRUE;
 }
 
 BOOL
@@ -204,11 +143,9 @@ xMBPortSerialSetTimeout( ULONG ulNewTimeoutMs )
 void
 vMBPortClose( void )
 {
-    if( iSerialFd != -1 )
+    if( uart_dev != NULL )
     {
-        ( void )tcsetattr( iSerialFd, TCSANOW, &xOldTIO );
-        ( void )close( iSerialFd );
-        iSerialFd = -1;
+        uart_irq_rx_disable(uart_dev);
     }
 }
 
@@ -216,70 +153,23 @@ BOOL
 prvbMBPortSerialRead( UCHAR * pucBuffer, USHORT usNBytes, USHORT * usNBytesRead )
 {
     BOOL            bResult = TRUE;
-    ssize_t         res;
-    fd_set          rfds;
-    struct timeval  tv;
 
-    tv.tv_sec = 0;
-    tv.tv_usec = 50000;
-    FD_ZERO( &rfds );
-    FD_SET( iSerialFd, &rfds );
-
-    /* Wait until character received or timeout. Recover in case of an
-     * interrupted read system call. */
-    do
+    *usNBytesRead = uart_fifo_read(uart_dev, pucBuffer, usNBytes);
+    if(*usNBytesRead < 1)
     {
-        if( select( iSerialFd + 1, &rfds, NULL, NULL, &tv ) == -1 )
-        {
-            if( errno != EINTR )
-            {
-                bResult = FALSE;
-            }
-        }
-        else if( FD_ISSET( iSerialFd, &rfds ) )
-        {
-            if( ( res = read( iSerialFd, pucBuffer, usNBytes ) ) == -1 )
-            {
-                bResult = FALSE;
-            }
-            else
-            {
-                *usNBytesRead = ( USHORT ) res;
-                break;
-            }
-        }
-        else
-        {
-            *usNBytesRead = 0;
-            break;
-        }
+        bResult = FALSE;
     }
-    while( bResult == TRUE );
     return bResult;
 }
 
 BOOL
 prvbMBPortSerialWrite( UCHAR * pucBuffer, USHORT usNBytes )
 {
-    ssize_t         res;
-    size_t          left = ( size_t ) usNBytes;
-    size_t          done = 0;
-
-    while( left > 0 )
+    for(USHORT i = 0;i < usNBytes;i ++)
     {
-        if( ( res = write( iSerialFd, pucBuffer + done, left ) ) == -1 )
-        {
-            if( errno != EINTR )
-            {
-                break;
-            }
-            /* call write again because of interrupted system call. */
-            continue;
-        }
-        done += res;
-        left -= res;
+        uart_poll_out(uart_dev, pucBuffer[i]);
     }
-    return left == 0 ? TRUE : FALSE;
+    return true;
 }
 
 BOOL

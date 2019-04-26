@@ -23,9 +23,13 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <posix/unistd.h>
 #include <errno.h>
 #include <zephyr.h>
+#include <kernel.h>
+#include <time.h>
+#include <unistd.h>
+#include <pthread.h>
+#include <semaphore.h>
 
 /* ----------------------- Modbus includes ----------------------------------*/
 #include "mb.h"
@@ -58,8 +62,7 @@ static enum ThreadState
     SHUTDOWN
 } ePollThreadState;
 
-static pthread_mutex_t xLock = PTHREAD_MUTEX_INITIALIZER;
-static BOOL     bDoExit;
+static pthread_mutex_t xLock;
 
 /* ----------------------- Static functions ---------------------------------*/
 static BOOL     bCreatePollingThread( void );
@@ -68,133 +71,36 @@ static void     vSetPollingThreadState( enum ThreadState eNewState );
 static void    *pvPollingThread( void *pvParameter );
 
 /* ----------------------- Start implementation -----------------------------*/
-BOOL
-bSetSignal( int iSignalNr, void ( *pSigHandler ) ( int ) )
-{
-    BOOL            bResult;
-    struct sigaction xNewSig, xOldSig;
-
-    xNewSig.sa_handler = pSigHandler;
-    sigemptyset( &xNewSig.sa_mask );
-    xNewSig.sa_flags = 0;
-    if( sigaction( iSignalNr, &xNewSig, &xOldSig ) != 0 )
-    {
-        bResult = FALSE;
-    }
-    else
-    {
-        bResult = TRUE;
-    }
-    return bResult;
-}
-
-void
-vSigShutdown( int xSigNr )
-{
-    switch ( xSigNr )
-    {
-    case SIGQUIT:
-    case SIGINT:
-    case SIGTERM:
-        vSetPollingThreadState( SHUTDOWN );
-        bDoExit = TRUE;
-    }
-}
 
 void modbus_rtu( void )
 {
-    int             iExitCode;
-    CHAR            cCh;
-    int argc, char *argv[];
-
     const UCHAR     ucSlaveID[] = { 0xAA, 0xBB, 0xCC };
-    if( !bSetSignal( SIGQUIT, vSigShutdown ) ||
-        !bSetSignal( SIGINT, vSigShutdown ) || !bSetSignal( SIGTERM, vSigShutdown ) )
-    {
-        fprintf( stderr, "%s: can't install signal handlers: %s!\n", PROG, strerror( errno ) );
-        iExitCode = EXIT_FAILURE;
-    }
-    else if( eMBInit( MB_RTU, 0x0A, 0, 38400, MB_PAR_EVEN ) != MB_ENOERR )
+
+    if( eMBInit( MB_RTU, 0x0A, 0, 38400, MB_PAR_EVEN ) != MB_ENOERR )
     {
         fprintf( stderr, "%s: can't initialize modbus stack!\n", PROG );
-        iExitCode = EXIT_FAILURE;
+        //iExitCode = EXIT_FAILURE;
     }
-    else if( eMBSetSlaveID( 0x34, TRUE, ucSlaveID, 3 ) != MB_ENOERR )
+    if( eMBSetSlaveID( 0x34, TRUE, ucSlaveID, 3 ) != MB_ENOERR )
     {
         fprintf( stderr, "%s: can't set slave id!\n", PROG );
-        iExitCode = EXIT_FAILURE;
+        //iExitCode = EXIT_FAILURE;
     }
-    else
+
+    vSetPollingThreadState( STOPPED );
+    vSetPollingThreadState( SHUTDOWN );
+    if( bCreatePollingThread(  ) != TRUE )
     {
-        vSetPollingThreadState( STOPPED );
-
-        /* CLI interface. */
-        printf( "Type 'q' for quit or 'h' for help!\n" );
-        bDoExit = FALSE;
-        do
-        {
-            printf( "> " );
-            cCh = getchar(  );
-
-            switch ( cCh )
-            {
-            case 'q':
-                bDoExit = TRUE;
-                break;
-            case 'd':
-                vSetPollingThreadState( SHUTDOWN );
-                break;
-            case 'e':
-                if( bCreatePollingThread(  ) != TRUE )
-                {
-                    printf( "Can't start protocol stack! Already running?\n" );
-                }
-                break;
-            case 's':
-                switch ( eGetPollingThreadState(  ) )
-                {
-                case RUNNING:
-                    printf( "Protocol stack is running.\n" );
-                    break;
-                case STOPPED:
-                    printf( "Protocol stack is stopped.\n" );
-                    break;
-                case SHUTDOWN:
-                    printf( "Protocol stack is shuting down.\n" );
-                    break;
-                }
-                break;
-            case 'h':
-                printf( "FreeModbus demo application help:\n" );
-                printf( "  'd' ... disable protocol stack.\n" );
-                printf( "  'e' ... enabled the protocol stack.\n" );
-                printf( "  's' ... show current status.\n" );
-                printf( "  'q' ... quit application.\n" );
-                printf( "  'h' ... this information.\n" );
-                printf( "\n" );
-                printf( "Copyright 2006 Christian Walter <wolti@sil.at>\n" );
-                break;
-            default:
-                if( !bDoExit && ( cCh != '\n' ) )
-                {
-                    printf( "illegal command '%c'!\n", cCh );
-                }
-                break;
-            }
-
-            /* eat up everything untill return character. */
-            while( !bDoExit && ( cCh != '\n' ) )
-            {
-                cCh = getchar(  );
-            }
-        }
-        while( !bDoExit );
-
-        /* Release hardware resources. */
-        ( void )eMBClose(  );
-        iExitCode = EXIT_SUCCESS;
+        printf( "Can't start protocol stack! Already running?\n" );
     }
-    return iExitCode;
+    while(1)
+    {
+        sleep(5);
+    }
+
+    /* Release hardware resources. */
+    ( void )eMBClose(  );
+
 }
 
 BOOL

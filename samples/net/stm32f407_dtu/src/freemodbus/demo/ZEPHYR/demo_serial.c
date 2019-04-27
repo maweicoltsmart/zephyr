@@ -65,7 +65,6 @@ static enum ThreadState
 static pthread_mutex_t xLock;
 
 /* ----------------------- Static functions ---------------------------------*/
-static BOOL     bCreatePollingThread( void );
 static enum ThreadState eGetPollingThreadState( void );
 static void     vSetPollingThreadState( enum ThreadState eNewState );
 static void    *pvPollingThread( void *pvParameter );
@@ -89,43 +88,15 @@ void modbus_rtu( void )
 
     vSetPollingThreadState( STOPPED );
     vSetPollingThreadState( SHUTDOWN );
-    if( bCreatePollingThread(  ) != TRUE )
-    {
-        printf( "Can't start protocol stack! Already running?\n" );
-    }
     while(1)
     {
-        sleep(5);
+        pvPollingThread(NULL);
+        usleep(50000);
     }
 
     /* Release hardware resources. */
     ( void )eMBClose(  );
 
-}
-
-BOOL
-bCreatePollingThread( void )
-{
-    BOOL            bResult;
-    pthread_t       xThread;
-
-    if( eGetPollingThreadState(  ) == STOPPED )
-    {
-        if( pthread_create( &xThread, NULL, pvPollingThread, NULL ) != 0 )
-        {
-            bResult = FALSE;
-        }
-        else
-        {
-            bResult = TRUE;
-        }
-    }
-    else
-    {
-        bResult = FALSE;
-    }
-
-    return bResult;
 }
 
 void           *

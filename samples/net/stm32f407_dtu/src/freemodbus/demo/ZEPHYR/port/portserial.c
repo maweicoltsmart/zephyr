@@ -31,6 +31,7 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include <uart.h>
+#include <ring_buffer.h>
 
 #include "port.h"
 
@@ -40,7 +41,7 @@
 #include "mbconfig.h"
 
 /* ----------------------- Defines  -----------------------------------------*/
-#define UART_DEVICE_NAME    "UART_1"
+#define UART_DEVICE_NAME    "UART_3"
 
 #if MB_ASCII_ENABLED == 1
 #define BUF_SIZE    513         /* must hold a complete ASCII frame. */
@@ -56,6 +57,11 @@ static ULONG    ulTimeoutMs;
 static UCHAR    ucBuffer[BUF_SIZE];
 static int      uiRxBufferPos;
 static int      uiTxBufferPos;
+
+#define MAX_READ_SIZE   128
+#define DATA_SIZE   (256)
+struct ring_buf rx_rb;
+static UCHAR uRxBuffer[DATA_SIZE];
 
 /* ----------------------- Function prototypes ------------------------------*/
 static BOOL     prvbMBPortSerialWrite( UCHAR * pucBuffer, USHORT usNBytes );
@@ -90,6 +96,10 @@ vMBPortSerialEnable( BOOL bEnableRx, BOOL bEnableTx )
 
 static void uart_fifo_callback(struct device *dev)
 {
+    u8_t recvData;
+    int rx,ret;
+    static u8_t read_buf[MAX_READ_SIZE];
+
     /* Verify uart_irq_update() */
     if (!uart_irq_update(dev)) {
         //TC_PRINT("retval should always be 1\n");
@@ -102,13 +112,23 @@ static void uart_fifo_callback(struct device *dev)
      * hence additional check for i < DATA_SIZE.
      */
     if (uart_irq_tx_ready(dev)) {
-
         uart_irq_tx_disable(dev);
     }
 
     /* Verify uart_irq_rx_ready() */
     if (uart_irq_rx_ready(dev)) {
-        //TC_PRINT("%c", recvData);
+        rx = uart_fifo_read(dev, read_buf, sizeof(read_buf));
+        if (rx > 0) {
+            ret = ring_buf_put(&rx_rb, read_buf, rx);
+            if (ret != rx) {
+                printk("Rx buffer doesn't have enough space. "
+                        "Bytes pending: %d, written: %d",
+                        rx, ret);
+                while (uart_fifo_read(dev, &recvData, 1) > 0) {
+                    continue;
+                }
+            }
+        }
     }
 }
 
@@ -117,12 +137,16 @@ xMBPortSerialInit( UCHAR ucPort, ULONG ulBaudRate, UCHAR ucDataBits, eMBParity e
 {
     uart_dev = device_get_binding(UART_DEVICE_NAME);
 
+    ring_buf_init(&rx_rb, DATA_SIZE, uRxBuffer);
+
     /* Verify uart_irq_callback_set() */
     uart_irq_callback_set(uart_dev, uart_fifo_callback);
 
     /* Enable Tx/Rx interrupt before using fifo */
     /* Verify uart_irq_rx_enable() */
     uart_irq_rx_enable(uart_dev);
+    prvbMBPortSerialWrite("uart3 working\r\n",15);
+    printk("serial port init over\r\n");
     return TRUE;
 }
 
@@ -154,11 +178,12 @@ prvbMBPortSerialRead( UCHAR * pucBuffer, USHORT usNBytes, USHORT * usNBytesRead 
 {
     BOOL            bResult = TRUE;
 
-    *usNBytesRead = uart_fifo_read(uart_dev, pucBuffer, usNBytes);
-    if(*usNBytesRead < 1)
+    usleep(50000);
+    *usNBytesRead = ring_buf_get(&rx_rb, pucBuffer, usNBytes);
+    /*if(*usNBytesRead > 0)
     {
-        bResult = FALSE;
-    }
+        printk("uart3 recv %d bytes\r\n",*usNBytesRead);
+    }*/
     return bResult;
 }
 
@@ -178,7 +203,6 @@ xMBPortSerialPoll(  )
     BOOL            bStatus = TRUE;
     USHORT          usBytesRead;
     int             i;
-
     while( bRxEnabled )
     {
         if( prvbMBPortSerialRead( &ucBuffer[0], BUF_SIZE, &usBytesRead ) )

@@ -91,7 +91,8 @@ void modbus_rtu( void )
     while(1)
     {
         pvPollingThread(NULL);
-        usleep(50000);
+        printk("polling quit\r\n");
+        //usleep(500);
     }
 
     /* Release hardware resources. */

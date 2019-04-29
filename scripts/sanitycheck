@@ -182,6 +182,7 @@ import shutil
 import signal
 import threading
 import time
+import datetime
 import csv
 import glob
 import serial
@@ -418,9 +419,11 @@ class ExecutionError(MakeError):
 
 log_file = None
 
-
 # Debug Functions
-def info(what):
+def info(what, show_time=True):
+    if options.timestamps and show_time:
+        date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        what = "{}: {}".format(date, what)
     sys.stdout.write(what + "\n")
     sys.stdout.flush()
     if log_file:
@@ -429,6 +432,9 @@ def info(what):
 
 
 def error(what):
+    if options.timestamps:
+        date = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+        what = "{}: {}".format(date, what)
     sys.stderr.write(COLOR_RED + what + COLOR_NORMAL + "\n")
     if log_file:
         log_file(what + "\n")
@@ -457,7 +463,7 @@ class HarnessImporter:
         self.instance = my_class()
 
 class Handler:
-    def __init__(self, instance):
+    def __init__(self, instance, type_str="build"):
         """Constructor
 
         @param name Arbitrary name of the created thread
@@ -474,6 +480,7 @@ class Handler:
         self.metrics["handler_time"] = 0
         self.metrics["ram_size"] = 0
         self.metrics["rom_size"] = 0
+        self.type_str = type_str
 
         self.binary = None
         self.pid_fn = None
@@ -501,12 +508,12 @@ class Handler:
         return ret
 
 class BinaryHandler(Handler):
-    def __init__(self, instance):
+    def __init__(self, instance, type_str):
         """Constructor
 
         @param instance Test Instance
         """
-        super().__init__(instance)
+        super().__init__(instance, type_str)
 
         self.valgrind = False
         self.terminated = False
@@ -597,12 +604,12 @@ class BinaryHandler(Handler):
 
 class DeviceHandler(Handler):
 
-    def __init__(self, instance):
+    def __init__(self, instance, type_str):
         """Constructor
 
         @param instance Test Instance
         """
-        super().__init__(instance)
+        super().__init__(instance, type_str)
 
     def monitor_serial(self, ser, halt_fileno, harness):
         log_out_fp = open(self.log, "wt")
@@ -802,25 +809,27 @@ class QEMUHandler(Handler):
         log_out_fp.close()
         out_fp.close()
         in_fp.close()
+        if os.path.exists(pid_fn):
+            pid = int(open(pid_fn).read())
+            os.unlink(pid_fn)
 
-        pid = int(open(pid_fn).read())
-        os.unlink(pid_fn)
-        try:
-            os.kill(pid, signal.SIGTERM)
-        except ProcessLookupError:
-            # Oh well, as long as it's dead! User probably sent Ctrl-C
-            pass
+            try:
+                if pid:
+                    os.kill(pid, signal.SIGTERM)
+            except ProcessLookupError:
+                # Oh well, as long as it's dead! User probably sent Ctrl-C
+                pass
 
         os.unlink(fifo_in)
         os.unlink(fifo_out)
 
-    def __init__(self, instance):
+    def __init__(self, instance, type_str):
         """Constructor
 
         @param instance Test instance
         """
 
-        super().__init__(instance)
+        super().__init__(instance, type_str)
 
         self.results = {}
         self.run = True
@@ -1215,24 +1224,24 @@ class MakeGenerator:
 
         handler = None
         if type == "qemu":
-            handler = QEMUHandler(instance)
+            handler = QEMUHandler(instance, "qemu")
         elif type == "native":
-            handler = BinaryHandler(instance)
+            handler = BinaryHandler(instance, "native")
             handler.binary = os.path.join(outdir, "zephyr", "zephyr.exe")
             if options.enable_coverage:
                 args += ["EXTRA_LDFLAGS=--coverage"]
         elif type == "nsim":
-            handler = BinaryHandler(instance)
+            handler = BinaryHandler(instance, "nsim")
             handler.call_make_run = True
         elif type == "unit":
-            handler = BinaryHandler(instance)
+            handler = BinaryHandler(instance, "unit")
             handler.binary = os.path.join(outdir, "testbinary")
             if options.enable_coverage:
                 args += ["EXTRA_LDFLAGS=--coverage"]
         elif type == "device":
-            handler = DeviceHandler(instance)
+            handler = DeviceHandler(instance, "device")
         elif type == "renode":
-            handler = BinaryHandler(instance)
+            handler = BinaryHandler(instance, "renode")
             handler.pid_fn = os.path.join(instance.outdir, "renode.pid")
             handler.call_make_run = True
 
@@ -1356,10 +1365,13 @@ class MakeGenerator:
                     # will cause the 'make run' invocation to exit with
                     # nonzero status.
                     # Need to distinguish this case from a compilation failure.
-                    if goal.handler:
+                    if goal.make_state == "building":
+                        goal.fail("build_error")
+                    elif goal.handler:
                         goal.fail("handler_crash")
                     else:
-                        goal.fail("build_error")
+                        goal.fail("unknown_error")
+
                 else:
                     goal = self.goals[name]
                     goal.make_state = state
@@ -1767,7 +1779,7 @@ class TestCase:
                 if _subcases:
                     subcases += _subcases
             except ValueError as e:
-                error("%s: can't find: %s", filename, e)
+                error("%s: can't find: %s" % (filename, e))
         return subcases
 
 
@@ -2775,6 +2787,10 @@ Artificially long but functional example:
             metavar="FILENAME",
             help="Generate a junit report with detailed testcase results.")
 
+    parser.add_argument("--timestamps",
+            action="store_true",
+            help="Print all messages with time stamps")
+
     parser.add_argument(
         "-r", "--release", action="store_true",
         help="Update the benchmark database with the results of this test "
@@ -2971,9 +2987,9 @@ def terse_test_cb(instances, goals, goal):
                 i.test.name,
                 COLOR_RED,
                 COLOR_NORMAL,
-                goal.reason))
+                goal.reason), False)
         log_info(goal.get_error_log())
-        info("")
+        info("", False)
 
     sys.stdout.write(
         "\rtotal complete: %s%4d/%4d%s  %2d%%  failed: %s%4d%s" %
@@ -3005,9 +3021,14 @@ def chatty_test_cb(instances, goals, goal):
     else:
         status = goal.make_state
 
-    info("{:>{}}/{} {:<25} {:<50} {}".format(
+    if goal.handler:
+        handler_type = goal.handler.type_str
+    else:
+        handler_type = "build"
+
+    info("{:>{}}/{} {:<25} {:<50} {} ({})".format(
         total_done, total_tests_width, total_tests, i.platform.name,
-        i.test.name, status))
+        i.test.name, status, handler_type))
     if goal.failed:
         log_info(goal.get_error_log())
 
@@ -3336,7 +3357,7 @@ def main():
         goals = ts.execute(
             terse_test_cb,
             ts.instances)
-        info("")
+        info("", False)
 
     if options.detailed_report:
         ts.testcase_target_report(options.detailed_report)

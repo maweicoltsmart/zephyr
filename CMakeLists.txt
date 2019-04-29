@@ -194,7 +194,7 @@ if(CONFIG_MISRA_SANE)
   zephyr_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Werror=vla>)
 endif()
 
-# @Intent: Obtain compiler specific flags for standard C includes
+# @Intent: Set compiler specific flags for standard C includes
 toolchain_cc_nostdinc()
 
 zephyr_compile_options(
@@ -221,9 +221,8 @@ zephyr_compile_options(
   $<$<COMPILE_LANGUAGE:ASM>:-D_ASMLANGUAGE>
 )
 
-zephyr_ld_options(
-  ${TOOLCHAIN_LD_FLAGS}
-)
+# @Intent: Set fundamental linker specific flags
+toolchain_ld_base()
 
 if(NOT CONFIG_NATIVE_APPLICATION)
 zephyr_ld_options(
@@ -396,7 +395,8 @@ zephyr_ld_options(
 
 # Sort the common symbols and each input section by alignment
 # in descending order to minimize padding between these symbols.
-zephyr_ld_options(
+zephyr_ld_option_ifdef(
+  CONFIG_LINKER_SORT_BY_ALIGNMENT
   ${LINKERFLAGPREFIX},--sort-common=descending
   ${LINKERFLAGPREFIX},--sort-section=alignment
   )
@@ -898,6 +898,8 @@ if(CONFIG_USERSPACE)
 endif()
 
 
+# Warning most of this gperf code is duplicated below for
+# gen_kobject_list.py / output_lib
 if(CONFIG_ARM AND CONFIG_USERSPACE)
   set(GEN_PRIV_STACKS $ENV{ZEPHYR_BASE}/scripts/gen_priv_stacks.py)
   set(PROCESS_PRIV_STACKS_GPERF $ENV{ZEPHYR_BASE}/scripts/process_gperf.py)
@@ -1021,6 +1023,8 @@ if(CONFIG_ARM AND CONFIG_USERSPACE)
   set_property(GLOBAL APPEND PROPERTY GENERATED_KERNEL_OBJECT_FILES priv_stacks_output_obj_renamed_lib)
 endif()
 
+# Warning: most of this gperf code is duplicated above for
+# gen_priv_stacks.py / priv_stacks_output_lib
 if(CONFIG_USERSPACE)
   set(GEN_KOBJ_LIST ${ZEPHYR_BASE}/scripts/gen_kobject_list.py)
   set(PROCESS_GPERF ${ZEPHYR_BASE}/scripts/process_gperf.py)
@@ -1035,7 +1039,7 @@ if(CONFIG_USERSPACE)
   # out of the nearly finished elf file, generating the source code
   # for a hash table based on that information, and then compiling and
   # linking the hash table back into a now even more nearly finished
-  # elf file.
+  # elf file. More information in gen_kobject_list.py --help.
 
   # Use the script GEN_KOBJ_LIST to scan the kernel binary's
   # (${ZEPHYR_PREBUILT_EXECUTABLE}) DWARF information to produce a table of kernel

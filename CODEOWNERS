@@ -21,22 +21,22 @@
 /soc/arm/st_stm32/stm32f4/                @rsalveti @idlethread
 /soc/arm/ti_simplelink/cc32xx/            @vanti
 /soc/arm/ti_simplelink/msp432p4xx/        @Mani-Sadhasivam
-/soc/xtensa/intel_s1000/                  @sathishkuttan @dcpleung @rgundi
-/arch/nios2/                              @andrewboie @ramakrishnapallala
+/soc/xtensa/intel_s1000/                  @sathishkuttan @dcpleung
+/arch/nios2/                              @andrewboie @wentongwu
 /arch/posix/                              @aescolar
 /arch/riscv32/                            @kgugala @pgielda @nategraff-sifive
 /soc/posix/                               @aescolar
 /soc/riscv32/                             @kgugala @pgielda @nategraff-sifive
-/arch/x86/                                @andrewboie @ramakrishnapallala
+/arch/x86/                                @andrewboie @wentongwu
 /arch/x86/core/                           @andrewboie
-/arch/x86/core/crt0.S                     @ramakrishnapallala @nashif
+/arch/x86/core/crt0.S                     @wentongwu @nashif
 /arch/x86/core/pcie.c                     @gnuless
-/soc/x86/                                 @andrewboie @ramakrishnapallala
+/soc/x86/                                 @andrewboie @wentongwu
 /soc/x86/intel_quark/quark_d2000/         @nashif
 /soc/x86/intel_quark/quark_se/            @nashif
 /soc/x86/intel_quark/quark_x1000/         @nashif
-/arch/xtensa/                             @andrewboie @rgundi @andyross
-/soc/xtensa/                              @andrewboie @rgundi @andyross
+/arch/xtensa/                             @andrewboie @dcpleung @andyross
+/soc/xtensa/                              @andrewboie @dcpleung @andyross
 /boards/arc/                              @vonhust @ruuddw
 /boards/arc/arduino_101_sss/              @nashif
 /boards/arc/em_starterkit/                @vonhust
@@ -47,6 +47,7 @@
 /boards/arm/96b_nitrogen/                 @idlethread
 /boards/arm/96b_neonkey/                  @Mani-Sadhasivam
 /boards/arm/96b_stm32_sensor_mez/         @Mani-Sadhasivam
+/boards/arm/96b_wistrio/                  @Mani-Sadhasivam
 /boards/arm/arduino_due/                  @ioannisg
 /boards/arm/cc3220sf_launchxl/            @vanti
 /boards/arm/curie_ble/                    @jhedberg
@@ -77,8 +78,9 @@
 /boards/arm/stm32*_disco/                 @erwango
 /boards/arm/stm32f3_disco/                @ydamigos
 /boards/arm/stm32*_eval/                  @erwango
-/boards/nios2/                            @ramakrishnapallala
-/boards/nios2/altera_max10/               @ramakrishnapallala
+/boards/nios2/                            @wentongwu
+/boards/nios2/altera_max10/               @wentongwu
+/boards/arm/stm32_min_dev/                @cbsiddharth
 /boards/posix/                            @aescolar
 /boards/riscv32/                          @kgugala @pgielda @nategraff-sifive
 /boards/shields/                          @erwango
@@ -132,13 +134,14 @@
 /drivers/sensor/lis*/                     @avisconti
 /drivers/sensor/lps*/                     @avisconti
 /drivers/sensor/lsm*/                     @avisconti
-/drivers/serial/uart_altera_jtag_hal.c    @ramakrishnapallala
+/drivers/serial/uart_altera_jtag_hal.c    @wentongwu
 /drivers/serial/*ns16550*                 @gnuless
-/drivers/net/slip.c                       @jukkar @tbursztyka
+/drivers/net/                             @jukkar @tbursztyka
+/drivers/ptp_clock/                       @jukkar
 /drivers/spi/                             @tbursztyka
 /drivers/spi/spi_ll_stm32.*               @superna9999
 /drivers/timer/cortex_m_systick.c         @ioannisg
-/drivers/timer/altera_avalon_timer_hal.c  @ramakrishnapallala
+/drivers/timer/altera_avalon_timer_hal.c  @wentongwu
 /drivers/timer/riscv_machine_timer.c      @nategraff-sifive @kgugala @pgielda
 /drivers/usb/                             @jfischer-phytec-iot @finikorg
 /drivers/usb/device/usb_dc_stm32.c        @ydamigos @loicpoulain
@@ -146,6 +149,7 @@
 /drivers/i2c/i2c_rv32m1_lpi2c*            @henrikbrixandersen
 /drivers/wifi/                            @jukkar @tbursztyka @pfalcon
 /drivers/wifi/eswifi/                     @loicpoulain
+/dts/arm/atmel/samr21.dtsi                @benpicco
 /dts/arm/st/                              @erwango
 /dts/arm/nordic/                          @ioannisg @carlescufi
 /dts/arm/nxp/                             @MaureenHelm
@@ -154,15 +158,17 @@
 /dts/bindings/serial/ns16550.yaml         @gnuless
 /dts/bindings/*/nordic*                   @anangl
 /dts/bindings/*/nxp*                      @MaureenHelm
+/dts/bindings/*/st,stm32*                 @erwango
 /dts/bindings/sensor/ams,ens210.yaml      @alexanderwachter
 /dts/bindings/sensor/ams,iaqcore.yaml     @alexanderwachter
-/ext/fs/                                  @nashif @ramakrishnapallala
+/ext/fs/                                  @nashif @wentongwu
+/ext/hal/atmel/asf/sam0/include/samr21/   @benpicco
 /ext/hal/cmsis/                           @MaureenHelm @galak
 /ext/hal/libmetal/                        @galak
 /ext/hal/nordic/                          @carlescufi @anangl
 /ext/hal/nxp/                             @MaureenHelm
 /ext/hal/qmsi/                            @nashif
-/ext/hal/st/stm32cube/                    @erwango
+/ext/hal/st/                              @erwango
 /ext/hal/ti/simplelink/                   @vanti
 /ext/lib/crypto/mbedtls/                  @nashif
 /ext/lib/crypto/tinycrypt/                @ceolin
@@ -177,7 +183,7 @@
 /include/arch/nios2/arch.h                @andrewboie
 /include/arch/posix/                      @aescolar
 /include/arch/riscv32/                    @nategraff-sifive @kgugala @pgielda
-/include/arch/x86/                        @andrewboie @ramakrishnapallala
+/include/arch/x86/                        @andrewboie @wentongwu
 /include/arch/x86/arch.h                  @andrewboie
 /include/arch/xtensa/                     @andrewboie
 /include/atomic.h                         @andrewboie @andyross
@@ -185,7 +191,7 @@
 /include/cache.h                          @andrewboie @andyross
 /include/can.h                            @alexanderwachter
 /include/counter.h                        @nordic-krch
-/include/device.h                         @ramakrishnapallala @nashif
+/include/device.h                         @wentongwu @nashif
 /include/display.h                        @vanwinkeljan
 /include/display/                         @vanwinkeljan
 /include/drivers/bluetooth/               @sjanc @jhedberg @Vudentz
@@ -196,8 +202,8 @@
 /include/drivers/pcie/                    @gnuless
 /include/drivers/serial/uart_ns16550.h    @gnuless
 /include/dt-bindings/pcie/                @gnuless
-/include/fs.h                             @nashif @ramakrishnapallala
-/include/fs/                              @nashif @ramakrishnapallala
+/include/fs.h                             @nashif @wentongwu
+/include/fs/                              @nashif @wentongwu
 /include/hwinfo.h                         @alexanderwachter
 /include/init.h                           @andrewboie @andyross
 /include/irq.h                            @andrewboie @andyross
@@ -217,7 +223,8 @@
 /include/net/                             @jukkar @tbursztyka @pfalcon
 /include/net/buf.h                        @jukkar @jhedberg @tbursztyka @pfalcon
 /include/posix/                           @pfalcon
-/include/power.h                          @ramakrishnapallala @nashif
+/include/power.h                          @wentongwu @nashif
+/include/ptp_clock.h                      @jukkar
 /include/sensor.h                         @bogdan-davidoaia
 /include/shared_irq.h                     @andrewboie @andyross
 /include/shell/                           @jarz-nordic @nordic-krch
@@ -232,11 +239,12 @@
 /lib/gui/                                 @vanwinkeljan
 /lib/os/                                  @andrewboie @andyross
 /lib/posix/                               @pfalcon
+/lib/libc/minimal/source/stdlib/bsearch.c @balajikulkarni
 /kernel/device.c                          @andrewboie @andyross @nashif
 /kernel/idle.c                            @andrewboie @andyross @nashif
 /samples/basic/servo_motor/*microbit*     @jhe
 /samples/bluetooth/                       @sjanc @jhedberg @Vudentz
-/samples/boards/intel_s1000_crb/          @sathishkuttan @rgundi @nashif
+/samples/boards/intel_s1000_crb/          @sathishkuttan @dcpleung @nashif
 /samples/display/                         @vanwinkeljan
 /samples/drivers/CAN/                     @alexanderwachter
 /samples/gui/                             @vanwinkeljan
@@ -251,11 +259,11 @@
 /samples/subsys/logging/                  @nordic-krch @jarz-nordic
 /samples/subsys/shell/                    @jarz-nordic @nordic-krch
 /samples/subsys/usb/                      @jfischer-phytec-iot @finikorg
-/samples/subsys/power/                    @ramakrishnapallala @pizi-nordic
+/samples/subsys/power/                    @wentongwu @pizi-nordic
 /scripts/coccicheck                       @himanshujha199640 @JuliaLawall
 /scripts/coccinelle/                      @himanshujha199640 @JuliaLawall
 /scripts/elf_helper.py                    @andrewboie
-/scripts/sanity_chk/expr_parser.py        @andrewboie @nashif
+/scripts/sanity_chk/expr_parser.py        @nashif
 /scripts/gen_app_partitions.py            @andrewboie
 /arch/x86/gen_gdt.py                      @andrewboie
 /arch/x86/gen_idt.py                      @andrewboie
@@ -265,8 +273,8 @@
 /scripts/gen_syscall_header.py            @andrewboie
 /scripts/gen_syscalls.py                  @andrewboie
 /scripts/process_gperf.py                 @andrewboie
-/scripts/sanity_chk/                      @andrewboie @nashif
-/scripts/sanitycheck                      @andrewboie @nashif
+/scripts/sanity_chk/                      @nashif
+/scripts/sanitycheck                      @nashif
 /scripts/series-push-hook.sh              @erwango
 /scripts/west_commands/                   @mbolivar
 /scripts/west-commands.yml                @mbolivar
@@ -281,23 +289,27 @@
 /subsys/net/ip/                           @jukkar @tbursztyka @pfalcon
 /subsys/net/lib/                          @jukkar @tbursztyka @pfalcon
 /subsys/net/lib/dns/                      @jukkar @tbursztyka @pfalcon
-/subsys/net/lib/http/                     @jukkar @tbursztyka
 /subsys/net/lib/lwm2m/                    @mike-scott
-/subsys/net/lib/mqtt/                     @jukkar @tbursztyka
+/subsys/net/lib/config/                   @jukkar @tbursztyka
+/subsys/net/lib/mqtt/                     @jukkar @tbursztyka @rlubos
+/subsys/net/lib/openthread/               @rlubos
 /subsys/net/lib/coap/                     @rveerama1
 /subsys/net/lib/sockets/                  @jukkar @tbursztyka @pfalcon
-/subsys/power/                            @ramakrishnapallala @pizi-nordic
+/subsys/net/lib/tls_credentials/          @rlubos
+/subsys/net/l2/                           @jukkar @tbursztyka
+/subsys/power/                            @wentongwu @pizi-nordic
 /subsys/settings/                         @nvlsianpu
 /subsys/shell/                            @jarz-nordic @nordic-krch
 /subsys/storage/                          @nvlsianpu
 /subsys/usb/                              @jfischer-phytec-iot @finikorg
 /tests/boards/native_posix/               @aescolar
-/tests/boards/intel_s1000_crb/            @rgundi @dcpleung @sathishkuttan
+/tests/boards/intel_s1000_crb/            @dcpleung @sathishkuttan
 /tests/bluetooth/                         @sjanc @jhedberg @Vudentz
 /tests/posix/                             @pfalcon
 /tests/crypto/                            @ceolin
 /tests/crypto/mbedtls/                    @nashif @ceolin
 /tests/drivers/can/                       @alexanderwachter
+/tests/drivers/flash_simulator/           @nvlsianpu
 /tests/drivers/hwinfo/                    @alexanderwachter
 /tests/drivers/spi/                       @tbursztyka
 /tests/drivers/uart/uart_async_api/       @Mierunski
@@ -309,7 +321,7 @@
 /tests/net/lib/mqtt_packet/               @jukkar @tbursztyka
 /tests/net/lib/coap/                      @rveerama1
 /tests/net/socket/                        @jukkar @tbursztyka @pfalcon
-/tests/subsys/fs/                         @nashif @ramakrishnapallala
+/tests/subsys/fs/                         @nashif @wentongwu
 /tests/subsys/settings/                   @nvlsianpu
 
 # Get all docs reviewed

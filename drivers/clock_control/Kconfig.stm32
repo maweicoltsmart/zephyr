@@ -11,6 +11,7 @@ if SOC_FAMILY_STM32
 menuconfig CLOCK_CONTROL_STM32_CUBE
 	bool "STM32 Reset & Clock Control"
 	select USE_STM32_LL_UTILS
+	select USE_STM32_LL_RCC if SOC_SERIES_STM32MP1X
 	help
 	  Enable driver for Reset & Clock Control subsystem found
 	  in STM32 family of MCUs
@@ -300,7 +301,7 @@ config CLOCK_STM32_PLL_Q_DIVISOR
 
 endif # SOC_SERIES_STM32F4X || SOC_SERIES_STM32F7X
 
-if SOC_SERIES_STM32L0X
+if SOC_SERIES_STM32L0X || SOC_SERIES_STM32L1X
 
 config CLOCK_STM32_PLL_MULTIPLIER
 	int "PLL multiplier"
@@ -319,7 +320,7 @@ config CLOCK_STM32_PLL_DIVISOR
 	help
 	  PLL divisor, allowed values: 2-4.
 
-endif # SOC_SERIES_STM32L0X
+endif # SOC_SERIES_STM32L0X || SOC_SERIES_STM32L1X
 
 if SOC_SERIES_STM32L4X || SOC_SERIES_STM32WBX
 

@@ -41,7 +41,7 @@
 #include "mbconfig.h"
 
 /* ----------------------- Defines  -----------------------------------------*/
-#define UART_DEVICE_NAME    "UART_3"
+#define UART_DEVICE_NAME    "UART_6"
 
 #if MB_ASCII_ENABLED == 1
 #define BUF_SIZE    513         /* must hold a complete ASCII frame. */

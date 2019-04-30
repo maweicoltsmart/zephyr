@@ -30,6 +30,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <misc/reboot.h>
 
 /* ----------------------- Modbus includes ----------------------------------*/
 #include "mb.h"
@@ -110,7 +111,10 @@ pvPollingThread( void *pvParameter )
         do
         {
             if( eMBPoll(  ) != MB_ENOERR )
+            {
+                sys_reboot(SYS_REBOOT_COLD);
                 break;
+            }
             usRegInputBuf[0] = ( USHORT ) rand(  );
         }
         while( eGetPollingThreadState(  ) != SHUTDOWN );

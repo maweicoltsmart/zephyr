@@ -36,6 +36,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <misc/reboot.h>
 
 /* size of stack area used by each thread */
 #define STACKSIZE 1024
@@ -69,20 +70,20 @@ static enum ThreadState
 } ePollThreadState;
 
 /* ----------------------- Static functions ---------------------------------*/
-static BOOL     bCreatePollingThread( void );
 static enum ThreadState eGetPollingThreadState( void );
 static void     eSetPollingThreadState( enum ThreadState eNewState );
 static void* pvPollingThread( void *pvParameter );
-
+extern struct k_sem got_address;
 /* ----------------------- Start implementation -----------------------------*/
 
 void modbus_tcp( void )
 {
     int             iExitCode;
-    CHAR           cCh;
-    BOOL            bDoExit;
     //int argc;char *argv[3] = {NULL};
 
+    /* Wait for a lease. */
+    k_sem_take(&got_address, K_FOREVER);
+    sleep(1);
     if( eMBTCPInit( MB_TCP_PORT_USE_DEFAULT ) != MB_ENOERR )
     {
         fprintf( stderr, "%s: can't initialize modbus stack!\r\n", PROG );
@@ -91,97 +92,13 @@ void modbus_tcp( void )
     else
     {
         eSetPollingThreadState( STOPPED );
-        /* CLI interface. */
-        printf(  "Type 'q' for quit or 'h' for help!\r\n"  );
-        bDoExit = FALSE;
-        do
-        {
-            printf(  "> "  );
-            cCh = getchar(  );
-            switch ( cCh )
-            {
-            case  'q' :
-                bDoExit = TRUE;
-                break;
-            case  'd' :
-                eSetPollingThreadState( SHUTDOWN );
-                break;
-            case  'e' :
-                if( bCreatePollingThread(  ) != TRUE )
-                {
-                    printf(  "Can't start protocol stack! Already running?\r\n"  );
-                }
-                break;
-            case  's' :
-                switch ( eGetPollingThreadState(  ) )
-                {
-                case RUNNING:
-                    printf(  "Protocol stack is running.\r\n"  );
-                    break;
-                case STOPPED:
-                    printf(  "Protocol stack is stopped.\r\n"  );
-                    break;
-                case SHUTDOWN:
-                    printf(  "Protocol stack is shuting down.\r\n"  );
-                    break;
-                }
-                break;
-            case  'h':
-                printf(  "FreeModbus demo application help:\r\n" );
-                printf(  "  'd' ... disable protocol stack.\r\n"  );
-                printf(  "  'e' ... enabled the protocol stack\r\n"  );
-                printf(  "  's' ... show current status\r\n"  );
-                printf(  "  'q' ... quit applicationr\r\n"  );
-                printf(  "  'h' ... this information\r\n"  );
-                printf(  "\r\n"  );
-                printf(  "Copyright 2007 Steven Guo <gotop167@163.com>\r\n"  );
-                break;
-            default:
-                if( cCh != '\n' )
-                {
-                    printf(  "illegal command '%c'!\r\n" , cCh );
-                }
-                break;
-            }
 
-            /* eat up everything untill return character. */
-            while( cCh != '\n' )
-            {
-                cCh = getchar(  );
-            }
-        }
-        while( !bDoExit );
-
+        pvPollingThread(NULL);
         /* Release hardware resources. */
         ( void )eMBClose(  );
         iExitCode = EXIT_SUCCESS;
     }
     return ;//iExitCode;
-}
-
-BOOL
-bCreatePollingThread( void )
-{
-    BOOL            bResult;
-	pthread_t       xThread;
-    if( eGetPollingThreadState(  ) == STOPPED )
-    {
-        if( pthread_create( &xThread, NULL, pvPollingThread, NULL ) != 0 )
-        {
-            /* Can't create the polling thread. */
-            bResult = FALSE;
-        }
-        else
-        {
-            bResult = TRUE;
-        }
-    }
-    else
-    {
-        bResult = FALSE;
-    }
-
-    return bResult;
 }
 
 void* pvPollingThread( void *pvParameter )
@@ -193,7 +110,10 @@ void* pvPollingThread( void *pvParameter )
         do
         {
             if( eMBPoll(  ) != MB_ENOERR )
+            {
+                sys_reboot(SYS_REBOOT_COLD);
                 break;
+            }
         }
         while( eGetPollingThreadState(  ) != SHUTDOWN );
     }

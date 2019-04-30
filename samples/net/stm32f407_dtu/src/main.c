@@ -24,6 +24,9 @@ LOG_MODULE_REGISTER(net_dhcpv4_client_sample, LOG_LEVEL_DBG);
 #define GPIO_OUT_DRV_NAME LED2_GPIO_CONTROLLER
 #define GPIO_OUT_PIN  LED2_GPIO_PIN
 
+/* Semaphore to indicate a lease has been acquired. */
+K_SEM_DEFINE(got_address, 0, 1);
+
 static struct net_mgmt_event_callback mgmt_cb;
 
 static void handler(struct net_mgmt_event_callback *cb,
@@ -31,6 +34,7 @@ static void handler(struct net_mgmt_event_callback *cb,
 		    struct net_if *iface)
 {
 	int i = 0;
+	bool notified = false;
 
 	if (mgmt_event != NET_EVENT_IPV4_ADDR_ADD) {
 		return;
@@ -58,6 +62,11 @@ static void handler(struct net_mgmt_event_callback *cb,
 			log_strdup(net_addr_ntop(AF_INET,
 						 &iface->config.ip.ipv4->gw,
 						 buf, sizeof(buf))));
+		if (!notified) {
+			k_sem_give(&got_address);
+			notified = true;
+		}
+		break;
 	}
 }
 

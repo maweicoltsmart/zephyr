@@ -291,7 +291,7 @@ static int eth_initialize(struct device *dev)
 
 	return 0;
 }
-
+const u8_t mjmacaddres[6] = {0};
 #if defined(CONFIG_ETH_STM32_HAL_RANDOM_MAC)
 static void generate_mac(u8_t *mac_addr)
 {
@@ -302,7 +302,8 @@ static void generate_mac(u8_t *mac_addr)
 	mac_addr[3] = entropy >> 8;
 	mac_addr[4] = entropy >> 16;
 	/* Locally administered, unicast */
-	mac_addr[5] = ((entropy >> 0) & 0xfc) | 0x02;
+	memcpy(mac_addr,mjmacaddres,6);
+	mac_addr[5] = (mac_addr[5] & 0xfc) | 0x02;
 }
 #endif
 

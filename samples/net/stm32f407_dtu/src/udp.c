@@ -1,5 +1,5 @@
 #include <logging/log.h>
-LOG_MODULE_REGISTER(net_echo_server_sample, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(net_echo_server_sample, LOG_LEVEL_ERR);
 
 #include <stdio.h>
 #include <string.h>
@@ -8,6 +8,7 @@ LOG_MODULE_REGISTER(net_echo_server_sample, LOG_LEVEL_DBG);
 #include <errno.h>
 #include <zephyr.h>
 #include <kernel.h>
+#include <json.h>
 
 #define MY_PORT	5000
 #define SERVER_PORT 4999
@@ -34,6 +35,53 @@ struct data {
 		char recv_buffer[RECV_BUFFER_SIZE];
 		u32_t counter;
 	} tcp;
+};
+
+struct scanrsp_struct {
+	char *dev_ip;
+	char *dev_name;
+	char * dev_mac;
+	char *dev_version;
+	char * dev_id;
+	char *dev_type;
+};
+
+struct getnetparam_struct {
+	bool conn2mj;
+	char *iptype;
+	char *dev_name;
+	char * dev_mac;
+	char * dev_id;
+	char *user_name;
+	char *user_pwd;
+	char *dev_ip;
+	char *net_mask;
+	char *gateway;
+	char *work_type;
+	char *dest_ip;
+	int dest_port;
+	int local_port;
+};
+
+struct getcomparam_struct {
+	char *protocol;
+	int baud;
+	char *databit;
+	char *stopbit;
+	char *paritybit;
+	char *flowctrl;
+	int timeout;
+	int maxlen;
+	bool autobaud;
+};
+
+static const struct json_obj_descr scanrspdes[] = {
+	JSON_OBJ_DESCR_PRIM(struct scanrsp_struct, dev_ip, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct scanrsp_struct, dev_name, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct scanrsp_struct, dev_mac, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct scanrsp_struct, dev_version, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct scanrsp_struct, dev_id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct scanrsp_struct, dev_type, JSON_TOK_STRING),
 };
 
 struct configs {
@@ -97,9 +145,27 @@ static int process_udp(struct data *data)
 			ret = -errno;
 			break;
 		}
+		struct scanrsp_struct rsp = {
+			.dev_ip = "192.168.1.1",
+			.dev_name = "device001",
+			.dev_mac = "201905040001",
+			.dev_version = "V1.0",
+			.dev_id = "2019050400000001",
+			.dev_type = "ETH_DTU",
+		};
+		memset(data->udp.recv_buffer,0,RECV_BUFFER_SIZE);
+		ret = json_obj_encode_buf(scanrspdes, ARRAY_SIZE(scanrspdes),
+				  &rsp, data->udp.recv_buffer, RECV_BUFFER_SIZE);
+		if(ret != 0)
+		{
+			printk("encode error\r\n");
+			continue;
+		}
+		printk("%s",data->udp.recv_buffer);
+
 		addr4 = (struct sockaddr_in *)&client_addr;
 		addr4->sin_port = htons(SERVER_PORT);
-		ret = sendto(data->udp.sock, data->udp.recv_buffer, received, 0,
+		ret = sendto(data->udp.sock, data->udp.recv_buffer, strlen(data->udp.recv_buffer), 0,
 			     &client_addr, client_addr_len);
 		if (ret < 0) {
 			NET_ERR("UDP (%s): Failed to send %d", data->proto,

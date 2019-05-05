@@ -63,7 +63,45 @@ struct getnetparam_struct {
 	int local_port;
 };
 
-struct getcomparam_struct {
+/*struct getcomparam_struct {
+	char *protocol;
+	int baud;
+	char *databit;
+	char *stopbit;
+	char *paritybit;
+	char *flowctrl;
+	int timeout;
+	int maxlen;
+	bool autobaud;
+};*/
+
+static const struct json_obj_descr scanrspdes[] = {
+	JSON_OBJ_DESCR_PRIM(struct scanrsp_struct, dev_ip, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct scanrsp_struct, dev_name, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct scanrsp_struct, dev_mac, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct scanrsp_struct, dev_version, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct scanrsp_struct, dev_id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct scanrsp_struct, dev_type, JSON_TOK_STRING),
+};
+
+static const struct json_obj_descr respnetdes[] = {
+	JSON_OBJ_DESCR_PRIM(struct getnetparam_struct, conn2mj, JSON_TOK_TRUE),
+	JSON_OBJ_DESCR_PRIM(struct getnetparam_struct, iptype, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct getnetparam_struct, dev_name, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct getnetparam_struct, dev_mac, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct getnetparam_struct, dev_id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct getnetparam_struct, user_name, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct getnetparam_struct, user_pwd, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct getnetparam_struct, dev_ip, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct getnetparam_struct, net_mask, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct getnetparam_struct, gateway, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct getnetparam_struct, work_type, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct getnetparam_struct, dest_ip, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct getnetparam_struct, dest_port, JSON_TOK_NUMBER),
+	JSON_OBJ_DESCR_PRIM(struct getnetparam_struct, local_port, JSON_TOK_NUMBER),
+};
+
+struct comport {
 	char *protocol;
 	int baud;
 	char *databit;
@@ -75,14 +113,39 @@ struct getcomparam_struct {
 	bool autobaud;
 };
 
-static const struct json_obj_descr scanrspdes[] = {
-	JSON_OBJ_DESCR_PRIM(struct scanrsp_struct, dev_ip, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM(struct scanrsp_struct, dev_name, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM(struct scanrsp_struct, dev_mac, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM(struct scanrsp_struct, dev_version, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM(struct scanrsp_struct, dev_id, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM(struct scanrsp_struct, dev_type, JSON_TOK_STRING),
+struct getcomparam_struct {
+	struct comport serial[2];
+	size_t num_serial;
 };
+
+static const struct json_obj_descr comport_descr[] = {
+	JSON_OBJ_DESCR_PRIM(struct comport, protocol, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct comport, baud, JSON_TOK_NUMBER),
+	JSON_OBJ_DESCR_PRIM(struct comport, databit, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct comport, stopbit, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct comport, paritybit, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct comport, flowctrl, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct comport, timeout, JSON_TOK_NUMBER),
+	JSON_OBJ_DESCR_PRIM(struct comport, maxlen, JSON_TOK_NUMBER),
+	JSON_OBJ_DESCR_PRIM(struct comport, autobaud, JSON_TOK_TRUE),
+};
+
+static const struct json_obj_descr rspserialdes[] = {
+	JSON_OBJ_DESCR_OBJ_ARRAY(struct getcomparam_struct, serial, 2, num_serial,
+				 comport_descr, ARRAY_SIZE(comport_descr)),
+};
+
+/*static const struct json_obj_descr rspserialdes[] = {
+	JSON_OBJ_DESCR_PRIM(struct getcomparam_struct, protocol, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct getcomparam_struct, baud, JSON_TOK_NUMBER),
+	JSON_OBJ_DESCR_PRIM(struct getcomparam_struct, databit, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct getcomparam_struct, stopbit, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct getcomparam_struct, paritybit, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct getcomparam_struct, flowctrl, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct getcomparam_struct, timeout, JSON_TOK_NUMBER),
+	JSON_OBJ_DESCR_PRIM(struct getcomparam_struct, maxlen, JSON_TOK_NUMBER),
+	JSON_OBJ_DESCR_PRIM(struct getcomparam_struct, autobaud, JSON_TOK_TRUE),
+};*/
 
 struct configs {
 	struct data ipv4;
@@ -97,6 +160,8 @@ struct configs conf = {
 		.proto = "IPv6",
 	},
 };
+
+extern char localip[];
 
 static int start_udp_proto(struct data *data, struct sockaddr *bind_addr,
 			   socklen_t bind_addrlen)
@@ -145,35 +210,131 @@ static int process_udp(struct data *data)
 			ret = -errno;
 			break;
 		}
-		struct scanrsp_struct rsp = {
-			.dev_ip = "192.168.1.1",
-			.dev_name = "device001",
-			.dev_mac = "201905040001",
-			.dev_version = "V1.0",
-			.dev_id = "2019050400000001",
-			.dev_type = "ETH_DTU",
-		};
-		memset(data->udp.recv_buffer,0,RECV_BUFFER_SIZE);
-		ret = json_obj_encode_buf(scanrspdes, ARRAY_SIZE(scanrspdes),
-				  &rsp, data->udp.recv_buffer, RECV_BUFFER_SIZE);
-		if(ret != 0)
+		if(memcmp(data->udp.recv_buffer,"www.coltsmart.com",17) == 0)
 		{
-			printk("encode error\r\n");
-			continue;
-		}
-		printk("%s",data->udp.recv_buffer);
+			struct scanrsp_struct rsp = {
+				.dev_ip = localip,
+				.dev_name = "device001",
+				.dev_mac = "201905040001",
+				.dev_version = "V1.0",
+				.dev_id = "2019050400000001",
+				.dev_type = "ETH_DTU",
+			};
+			memset(data->udp.recv_buffer,0,RECV_BUFFER_SIZE);
+			ret = json_obj_encode_buf(scanrspdes, ARRAY_SIZE(scanrspdes),
+					  &rsp, data->udp.recv_buffer, RECV_BUFFER_SIZE);
+			if(ret != 0)
+			{
+				printk("encode error\r\n");
+				continue;
+			}
+			printk("%s",data->udp.recv_buffer);
 
-		addr4 = (struct sockaddr_in *)&client_addr;
-		addr4->sin_port = htons(SERVER_PORT);
-		ret = sendto(data->udp.sock, data->udp.recv_buffer, strlen(data->udp.recv_buffer), 0,
-			     &client_addr, client_addr_len);
-		if (ret < 0) {
-			NET_ERR("UDP (%s): Failed to send %d", data->proto,
-				errno);
-			ret = -errno;
-			break;
+			addr4 = (struct sockaddr_in *)&client_addr;
+			addr4->sin_port = htons(SERVER_PORT);
+			ret = sendto(data->udp.sock, data->udp.recv_buffer, strlen(data->udp.recv_buffer), 0,
+				     &client_addr, client_addr_len);
+			if (ret < 0) {
+				NET_ERR("UDP (%s): Failed to send %d", data->proto,
+					errno);
+				ret = -errno;
+				break;
+			}
 		}
+		else if(memcmp(data->udp.recv_buffer,"get net param",13) == 0)
+		{
+			struct getnetparam_struct rspnet = {
+				.conn2mj = true,
+				.iptype = "DHCP",
+				.dev_name = "device001",
+				.dev_mac = "201905040001",
+				.dev_id = "2019050400000001",
+				.user_name = "coltsmart",
+				.user_pwd = "www.coltsmart.com",
+				.dev_ip = localip,
+				.net_mask = "255.255.255.255",
+				.gateway = "192.168.1.1",
+				.work_type = "TCP Sever",
+				.dest_ip = "192.168.1.2",
+				.dest_port = 4999,
+				.local_port = 5000,
+			};
+			memset(data->udp.recv_buffer,0,RECV_BUFFER_SIZE);
+			ret = json_obj_encode_buf(respnetdes, ARRAY_SIZE(respnetdes),
+					  &rspnet, data->udp.recv_buffer, RECV_BUFFER_SIZE);
+			if(ret != 0)
+			{
+				printk("encode error\r\n");
+				continue;
+			}
+			printk("%s",data->udp.recv_buffer);
 
+			addr4 = (struct sockaddr_in *)&client_addr;
+			addr4->sin_port = htons(SERVER_PORT);
+			ret = sendto(data->udp.sock, data->udp.recv_buffer, strlen(data->udp.recv_buffer), 0,
+				     &client_addr, client_addr_len);
+			if (ret < 0) {
+				NET_ERR("UDP (%s): Failed to send %d", data->proto,
+					errno);
+				ret = -errno;
+				break;
+			}
+		}
+		else if(memcmp(data->udp.recv_buffer,"get serial param",16) == 0)
+		{
+			struct getcomparam_struct rspserial = {
+				.serial = {
+					[0] = { 
+						.protocol = "RS232",
+						.baud = 115200,
+						.databit = "8",
+						.stopbit = "1",
+						.paritybit = "None",
+						.flowctrl = "None",
+						.timeout = 5,
+						.maxlen = 1024,
+						.autobaud = false,
+					},
+					[1] = {
+						.protocol = "RS485",
+						.baud = 115200,
+						.databit = "8",
+						.stopbit = "1",
+						.paritybit = "None",
+						.flowctrl = "None",
+						.timeout = 5,
+						.maxlen = 1024,
+						.autobaud = false,
+					},
+				},
+				.num_serial = 2,
+			};
+
+			memset(data->udp.recv_buffer,0,RECV_BUFFER_SIZE);
+			ret = json_obj_encode_buf(rspserialdes, ARRAY_SIZE(rspserialdes),
+					  &rspserial, data->udp.recv_buffer, RECV_BUFFER_SIZE);
+			if(ret != 0)
+			{
+				printk("encode error\r\n");
+				continue;
+			}
+			printk("%s",data->udp.recv_buffer);
+
+			addr4 = (struct sockaddr_in *)&client_addr;
+			addr4->sin_port = htons(SERVER_PORT);
+			ret = sendto(data->udp.sock, data->udp.recv_buffer, strlen(data->udp.recv_buffer), 0,
+				     &client_addr, client_addr_len);
+			if (ret < 0) {
+				NET_ERR("UDP (%s): Failed to send %d", data->proto,
+					errno);
+				ret = -errno;
+				break;
+			}
+		}
+		else
+		{
+
+		}
 		if (++data->udp.counter % 1000 == 0U) {
 			NET_INFO("%s UDP: Sent %u packets", data->proto,
 				 data->udp.counter);

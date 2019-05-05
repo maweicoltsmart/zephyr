@@ -24,6 +24,8 @@ LOG_MODULE_REGISTER(net_dhcpv4_client_sample, LOG_LEVEL_DBG);
 #define GPIO_OUT_DRV_NAME LED2_GPIO_CONTROLLER
 #define GPIO_OUT_PIN  LED2_GPIO_PIN
 
+char localip[NET_IPV4_ADDR_LEN];
+
 /* Semaphore to indicate a lease has been acquired. */
 K_SEM_DEFINE(got_address, 0, 1);
 
@@ -52,6 +54,7 @@ static void handler(struct net_mgmt_event_callback *cb,
 			log_strdup(net_addr_ntop(AF_INET,
 			    &iface->config.ip.ipv4->unicast[i].address.in_addr,
 						  buf, sizeof(buf))));
+		memcpy(localip,buf,sizeof(buf));
 		LOG_INF("Lease time: %u seconds",
 			 iface->config.dhcpv4.lease_time);
 		LOG_INF("Subnet: %s",

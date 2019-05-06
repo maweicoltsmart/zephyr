@@ -333,7 +333,29 @@ static int process_udp(struct data *data)
 		}
 		else
 		{
-
+			printk("%s\r\n",data->udp.recv_buffer);
+			struct getnetparam_struct netparam;
+			data->udp.recv_buffer[RECV_BUFFER_SIZE - 1] = 0x00;
+			ret = json_obj_parse(data->udp.recv_buffer, sizeof(data->udp.recv_buffer) - 1, respnetdes,
+			     ARRAY_SIZE(respnetdes), &netparam);
+			if(ret < 0)
+			{
+				struct getcomparam_struct comparam;
+				data->udp.recv_buffer[RECV_BUFFER_SIZE - 1] = 0x00;
+				ret = json_obj_parse(data->udp.recv_buffer, sizeof(data->udp.recv_buffer) - 1, rspserialdes,
+			     	ARRAY_SIZE(rspserialdes), &comparam);
+				if(ret < 0)
+				{
+				}
+				else
+				{
+					printk("serial conf\r\n");
+				}
+			}
+			else
+			{
+				printk("net conf\r\n");
+			}
 		}
 		if (++data->udp.counter % 1000 == 0U) {
 			NET_INFO("%s UDP: Sent %u packets", data->proto,

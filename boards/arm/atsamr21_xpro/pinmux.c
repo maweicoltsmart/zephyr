@@ -10,50 +10,50 @@
 
 static int board_pinmux_init(struct device *dev)
 {
-	struct device *muxa = device_get_binding(DT_PINMUX_SAM0_A_LABEL);
-	struct device *muxb = device_get_binding(DT_PINMUX_SAM0_B_LABEL);
+	struct device *muxa = device_get_binding(DT_ATMEL_SAM0_PINMUX_PINMUX_A_LABEL);
+	struct device *muxb = device_get_binding(DT_ATMEL_SAM0_PINMUX_PINMUX_B_LABEL);
 
 	ARG_UNUSED(dev);
 
-#if DT_UART_SAM0_SERCOM0_BASE_ADDRESS
+#if DT_ATMEL_SAM0_UART_SERCOM_0_BASE_ADDRESS
 	/* SERCOM0 on RX=PA5, TX=PA4 */
 	pinmux_pin_set(muxa, 4, PINMUX_FUNC_D);
 	pinmux_pin_set(muxa, 5, PINMUX_FUNC_D);
 #endif
-#if DT_UART_SAM0_SERCOM1_BASE_ADDRESS
+#if DT_ATMEL_SAM0_UART_SERCOM_1_BASE_ADDRESS
 #error Pin mapping is not configured
 #endif
-#if DT_UART_SAM0_SERCOM2_BASE_ADDRESS
+#if DT_ATMEL_SAM0_UART_SERCOM_2_BASE_ADDRESS
 #error Pin mapping is not configured
 #endif
-#if DT_UART_SAM0_SERCOM3_BASE_ADDRESS
+#if DT_ATMEL_SAM0_UART_SERCOM_3_BASE_ADDRESS
 #error Pin mapping is not configured
 #endif
-#if DT_UART_SAM0_SERCOM4_BASE_ADDRESS
+#if DT_ATMEL_SAM0_UART_SERCOM_4_BASE_ADDRESS
 #error Pin mapping is not configured
 #endif
-#if DT_UART_SAM0_SERCOM5_BASE_ADDRESS
+#if DT_ATMEL_SAM0_UART_SERCOM_5_BASE_ADDRESS
 	/* SERCOM5 on RX=PA23, TX=PA22 */
 	pinmux_pin_set(muxa, 22, PINMUX_FUNC_D);
 	pinmux_pin_set(muxa, 23, PINMUX_FUNC_D);
 #endif
 
-#if DT_SPI_SAM0_SERCOM0_BASE_ADDRESS
+#if DT_ATMEL_SAM0_SPI_SERCOM_0_BASE_ADDRESS
 #error Pin mapping is not configured
 #endif
-#if DT_SPI_SAM0_SERCOM1_BASE_ADDRESS
+#if DT_ATMEL_SAM0_SPI_SERCOM_1_BASE_ADDRESS
 #error Pin mapping is not configured
 #endif
-#if DT_SPI_SAM0_SERCOM2_BASE_ADDRESS
+#if DT_ATMEL_SAM0_SPI_SERCOM_2_BASE_ADDRESS
 #error Pin mapping is not configured
 #endif
-#if DT_SPI_SAM0_SERCOM3_BASE_ADDRESS
+#if DT_ATMEL_SAM0_SPI_SERCOM_3_BASE_ADDRESS
 #error Pin mapping is not configured
 #endif
-#if DT_SPI_SAM0_SERCOM4_BASE_ADDRESS
+#if DT_ATMEL_SAM0_SPI_SERCOM_4_BASE_ADDRESS
 #error Pin mapping is not configured
 #endif
-#if DT_SPI_SAM0_SERCOM5_BASE_ADDRESS
+#if DT_ATMEL_SAM0_SPI_SERCOM_5_BASE_ADDRESS
 	pinmux_pin_set(muxb,  2, PINMUX_FUNC_D);
 	pinmux_pin_set(muxb, 22, PINMUX_FUNC_D);
 	pinmux_pin_set(muxb, 23, PINMUX_FUNC_D);

@@ -128,10 +128,9 @@ static struct {
 static inline int mesh_x_set(settings_read_cb read_cb, void *cb_arg, void *out,
 			     size_t read_len)
 {
-	size_t len;
+	ssize_t len;
 
 	len = read_cb(cb_arg, out, read_len);
-
 	if (len < 0) {
 		BT_ERR("Failed to read value (err %zu)", len);
 		return len;
@@ -513,7 +512,7 @@ static int cfg_set(int argc, char **argv, size_t len_rd,
 static int mod_set_bind(struct bt_mesh_model *mod, size_t len_rd,
 			settings_read_cb read_cb, void *cb_arg)
 {
-	size_t len;
+	ssize_t len;
 	int i;
 
 	/* Start with empty array regardless of cleared or set value */
@@ -540,7 +539,7 @@ static int mod_set_bind(struct bt_mesh_model *mod, size_t len_rd,
 static int mod_set_sub(struct bt_mesh_model *mod, size_t len_rd,
 		       settings_read_cb read_cb, void *cb_arg)
 {
-	size_t len;
+	ssize_t len;
 
 	/* Start with empty array regardless of cleared or set value */
 	(void)memset(mod->groups, 0, sizeof(mod->groups));
@@ -809,22 +808,38 @@ static int mesh_commit(void)
 
 BT_SETTINGS_DEFINE(mesh, mesh_set, mesh_commit, NULL);
 
+/* Pending flags that use K_NO_WAIT as the storage timeout */
+#define NO_WAIT_PENDING_BITS (BIT(BT_MESH_NET_PENDING) |           \
+			      BIT(BT_MESH_IV_PENDING) |            \
+			      BIT(BT_MESH_SEQ_PENDING))
+
+/* Pending flags that use CONFIG_BT_MESH_STORE_TIMEOUT */
+#define GENERIC_PENDING_BITS (BIT(BT_MESH_KEYS_PENDING) |          \
+			      BIT(BT_MESH_HB_PUB_PENDING) |        \
+			      BIT(BT_MESH_CFG_PENDING) |           \
+			      BIT(BT_MESH_MOD_PENDING))
+
 static void schedule_store(int flag)
 {
-	s32_t timeout;
+	s32_t timeout, remaining;
 
 	atomic_set_bit(bt_mesh.flags, flag);
 
-	if (atomic_test_bit(bt_mesh.flags, BT_MESH_NET_PENDING) ||
-	    atomic_test_bit(bt_mesh.flags, BT_MESH_IV_PENDING) ||
-	    atomic_test_bit(bt_mesh.flags, BT_MESH_SEQ_PENDING)) {
+	if (atomic_get(bt_mesh.flags) & NO_WAIT_PENDING_BITS) {
 		timeout = K_NO_WAIT;
 	} else if (atomic_test_bit(bt_mesh.flags, BT_MESH_RPL_PENDING) &&
-		   (CONFIG_BT_MESH_RPL_STORE_TIMEOUT <
-		    CONFIG_BT_MESH_STORE_TIMEOUT)) {
+		   (!(atomic_get(bt_mesh.flags) & GENERIC_PENDING_BITS) ||
+		    (CONFIG_BT_MESH_RPL_STORE_TIMEOUT <
+		     CONFIG_BT_MESH_STORE_TIMEOUT))) {
 		timeout = K_SECONDS(CONFIG_BT_MESH_RPL_STORE_TIMEOUT);
 	} else {
 		timeout = K_SECONDS(CONFIG_BT_MESH_STORE_TIMEOUT);
+	}
+
+	remaining = k_delayed_work_remaining_get(&pending_store);
+	if (remaining && remaining < timeout) {
+		BT_DBG("Not rescheduling due to existing earlier deadline");
+		return;
 	}
 
 	BT_DBG("Waiting %d seconds", timeout / MSEC_PER_SEC);

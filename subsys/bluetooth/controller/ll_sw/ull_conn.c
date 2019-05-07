@@ -95,12 +95,13 @@ static void ticker_op_cb(u32_t status, void *params);
 				CONFIG_BT_CTLR_TX_BUFFER_SIZE)
 
 #define CONN_TX_CTRL_BUFFERS 2
-#define CONN_TX_CTRL_BUF_SIZE (MROUND(offsetof(struct node_tx, pdu) + \
-				      offsetof(struct pdu_data, llctrl) + \
-				      sizeof(struct pdu_data_llctrl)) * \
-			       CONN_TX_CTRL_BUFFERS)
+#define CONN_TX_CTRL_BUF_SIZE MROUND(offsetof(struct node_tx, pdu) + \
+				     offsetof(struct pdu_data, llctrl) + \
+				     sizeof(struct pdu_data_llctrl))
 
 static MFIFO_DEFINE(conn_tx, sizeof(struct lll_tx), CONFIG_BT_CTLR_TX_BUFFERS);
+static MFIFO_DEFINE(conn_ack, sizeof(struct lll_tx), CONFIG_BT_CTLR_TX_BUFFERS);
+
 
 static struct {
 	void *free;
@@ -568,6 +569,9 @@ int ull_conn_reset(void)
 
 	/* Re-initialize the Tx mfifo */
 	MFIFO_INIT(conn_tx);
+
+	/* Re-initialize the Tx Ack mfifo */
+	MFIFO_INIT(conn_ack);
 
 	/* Reset the current conn update conn context pointer */
 	conn_upd_curr = NULL;
@@ -1238,6 +1242,95 @@ void ull_conn_link_tx_release(void *link)
 	mem_release(link, &mem_link_tx.free);
 }
 
+u8_t ull_conn_ack_last_idx_get(void)
+{
+	return mfifo_conn_ack.l;
+}
+
+memq_link_t *ull_conn_ack_peek(u8_t *ack_last, u16_t *handle,
+			       struct node_tx **tx)
+{
+	struct lll_tx *lll_tx;
+
+	lll_tx = MFIFO_DEQUEUE_GET(conn_ack);
+	if (!lll_tx) {
+		return NULL;
+	}
+
+	*ack_last = mfifo_conn_ack.l;
+
+	*handle = lll_tx->handle;
+	*tx = lll_tx->node;
+
+	return (*tx)->link;
+}
+
+memq_link_t *ull_conn_ack_by_last_peek(u8_t last, u16_t *handle,
+				       struct node_tx **tx)
+{
+	struct lll_tx *lll_tx;
+
+	lll_tx = mfifo_dequeue_get(mfifo_conn_ack.m, mfifo_conn_ack.s,
+				   mfifo_conn_ack.f, last);
+	if (!lll_tx) {
+		return NULL;
+	}
+
+	*handle = lll_tx->handle;
+	*tx = lll_tx->node;
+
+	return (*tx)->link;
+}
+
+void *ull_conn_ack_dequeue(void)
+{
+	return MFIFO_DEQUEUE(conn_ack);
+}
+
+void ull_conn_lll_ack_enqueue(u16_t handle, struct node_tx *tx)
+{
+	struct lll_tx *lll_tx;
+	u8_t idx;
+
+	idx = MFIFO_ENQUEUE_GET(conn_ack, (void **)&lll_tx);
+	LL_ASSERT(lll_tx);
+
+	lll_tx->handle = handle;
+	lll_tx->node = tx;
+
+	MFIFO_ENQUEUE(conn_ack, idx);
+}
+
+void ull_conn_lll_tx_flush(void *param)
+{
+	struct lll_conn *lll = param;
+	struct node_tx *tx;
+	memq_link_t *link;
+
+	link = memq_dequeue(lll->memq_tx.tail, &lll->memq_tx.head,
+			    (void **)&tx);
+	while (link) {
+		struct pdu_data *p;
+		struct lll_tx *lll_tx;
+		u8_t idx;
+
+		idx = MFIFO_ENQUEUE_GET(conn_ack, (void **)&lll_tx);
+		LL_ASSERT(lll_tx);
+
+		lll_tx->handle = 0xFFFF;
+		lll_tx->node = tx;
+		link->next = tx->next;
+		tx->link = link;
+		p = (void *)tx->pdu;
+		p->ll_id = PDU_DATA_LLID_RESV;
+
+		MFIFO_ENQUEUE(conn_ack, idx);
+
+		link = memq_dequeue(lll->memq_tx.tail, &lll->memq_tx.head,
+				    (void **)&tx);
+	}
+}
+
 void ull_conn_tx_ack(struct ll_conn *conn, memq_link_t *link,
 		     struct node_tx *tx)
 {
@@ -1331,7 +1424,7 @@ static void ticker_op_stop_cb(u32_t status, void *param)
 {
 	u32_t retval;
 	static memq_link_t link;
-	static struct mayfly mfy = {0, 0, &link, NULL, lll_conn_tx_flush};
+	static struct mayfly mfy = {0, 0, &link, NULL, ull_conn_lll_tx_flush};
 
 	LL_ASSERT(status == TICKER_STATUS_SUCCESS);
 
@@ -1742,7 +1835,7 @@ static inline int event_conn_upd_prep(struct ll_conn *conn,
 				   lll_conn_ppm_get(lll->slave.sca)) *
 				  conn_interval_us) + (1000000 - 1)) / 1000000U;
 			lll->slave.window_widening_max_us =
-				(conn_interval_us >> 1) - TIFS_US;
+				(conn_interval_us >> 1) - EVENT_IFS_US;
 			lll->slave.window_size_prepare_us =
 				conn->llcp.conn_upd.win_size * 1250U;
 			conn->slave.ticks_to_offset = 0U;
@@ -2074,6 +2167,44 @@ static inline void event_enc_prep(struct ll_conn *conn)
 static inline void event_fex_prep(struct ll_conn *conn)
 {
 	struct node_tx *tx;
+
+	if (conn->common.fex_valid) {
+		struct node_rx_pdu *rx;
+		struct pdu_data *pdu;
+
+		/* procedure request acked */
+		conn->llcp_ack = conn->llcp_req;
+
+		/* get a rx node for ULL->LL */
+		rx = ll_pdu_rx_alloc();
+		if (!rx) {
+			return;
+		}
+
+		rx->hdr.handle = conn->lll.handle;
+		rx->hdr.type = NODE_RX_TYPE_DC_PDU;
+
+		/* prepare feature rsp structure */
+		pdu = (void *)rx->pdu;
+		pdu->ll_id = PDU_DATA_LLID_CTRL;
+		pdu->len = offsetof(struct pdu_data_llctrl, feature_rsp) +
+			   sizeof(struct pdu_data_llctrl_feature_rsp);
+		pdu->llctrl.opcode = PDU_DATA_LLCTRL_TYPE_FEATURE_RSP;
+		(void)memset(&pdu->llctrl.feature_rsp.features[0], 0x00,
+			sizeof(pdu->llctrl.feature_rsp.features));
+		pdu->llctrl.feature_req.features[0] =
+			conn->llcp_features & 0xFF;
+		pdu->llctrl.feature_req.features[1] =
+			(conn->llcp_features >> 8) & 0xFF;
+		pdu->llctrl.feature_req.features[2] =
+			(conn->llcp_features >> 16) & 0xFF;
+
+		/* enqueue feature rsp structure into rx queue */
+		ll_rx_put(rx->hdr.link, rx);
+		ll_rx_sched();
+
+		return;
+	}
 
 	tx = mem_acquire(&mem_conn_tx_ctrl.free);
 	if (tx) {
@@ -3391,29 +3522,26 @@ static inline void reject_ind_conn_upd_recv(struct ll_conn *conn,
 
 		goto reject_ind_conn_upd_recv_exit;
 	}
-	/* Same Procedure or Different Procedure Collision */
-
-	/* If not same procedure, stop procedure timeout, else
-	 * continue timer until phy upd ind is received.
-	 */
+	/* FIXME: handle unsupported LL parameters error */
 	else if (rej_ext_ind->error_code != BT_HCI_ERR_LL_PROC_COLLISION) {
+		/* update to next ticks offset */
+		if (lll->role) {
+			conn->slave.ticks_to_offset =
+			    conn->llcp_conn_param.ticks_to_offset_next;
+		}
+	}
+
+	if (conn->llcp_conn_param.state == LLCP_CPR_STATE_RSP_WAIT) {
 		LL_ASSERT(conn_upd_curr == conn);
 
 		/* reset mutex */
 		conn_upd_curr = NULL;
 
 		/* Procedure complete */
-		conn->llcp_conn_param.ack =
-			conn->llcp_conn_param.req;
+		conn->llcp_conn_param.ack = conn->llcp_conn_param.req;
 
 		/* Stop procedure timeout */
 		conn->procedure_expire = 0U;
-
-		/* update to next ticks offsets */
-		if (lll->role) {
-			conn->slave.ticks_to_offset =
-			    conn->llcp_conn_param.ticks_to_offset_next;
-		}
 	}
 
 	/* skip event generation if not cmd initiated */
@@ -4065,6 +4193,13 @@ static inline void ctrl_tx_ack(struct ll_conn *conn, struct node_tx **tx,
 			conn->pause_tx = 1U;
 		}
 		break;
+
+	case PDU_DATA_LLCTRL_TYPE_REJECT_EXT_IND:
+		if (pdu_tx->llctrl.reject_ext_ind.reject_opcode !=
+		    PDU_DATA_LLCTRL_TYPE_ENC_REQ) {
+			break;
+		}
+		/* Pass through */
 
 	case PDU_DATA_LLCTRL_TYPE_REJECT_IND:
 		/* resume data packet rx and tx */

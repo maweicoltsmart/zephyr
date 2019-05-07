@@ -32,6 +32,7 @@ assert(toolchain_is_ok "The toolchain is unable to build a dummy C file. See CMa
 set(CMAKE_EXECUTABLE_SUFFIX .elf)
 set(ZEPHYR_PREBUILT_EXECUTABLE zephyr_prebuilt)
 
+# Set some phony targets to collect dependencies
 set(OFFSETS_H_TARGET           offsets_h)
 set(SYSCALL_MACROS_H_TARGET    syscall_macros_h_target)
 set(SYSCALL_LIST_H_TARGET      syscall_list_h_target)
@@ -225,17 +226,13 @@ zephyr_compile_options(
 toolchain_ld_base()
 
 if(NOT CONFIG_NATIVE_APPLICATION)
-zephyr_ld_options(
-  -nostdlib
-  -static
-  -no-pie
-)
+  # @Intent: Set linker specific flags for bare metal target
+  toolchain_ld_baremetal()
 endif()
 
 if(CONFIG_LIB_CPLUSPLUS)
-zephyr_ld_options(
-  -lstdc++
-)
+  # @Intent: Set linker specific flags for C++
+  toolchain_ld_cpp()
 endif()
 
 # ==========================================================================
@@ -379,56 +376,9 @@ if(CONFIG_USERSPACE)
   endif()
 endif()
 
-set_ifndef(LINKERFLAGPREFIX -Wl)
-
-if(NOT CONFIG_NATIVE_APPLICATION)
-zephyr_ld_options(
-  ${LINKERFLAGPREFIX},-X
-  ${LINKERFLAGPREFIX},-N
-  )
-endif()
-
-zephyr_ld_options(
-  ${LINKERFLAGPREFIX},--gc-sections
-  ${LINKERFLAGPREFIX},--build-id=none
-  )
-
-# Sort the common symbols and each input section by alignment
-# in descending order to minimize padding between these symbols.
-zephyr_ld_option_ifdef(
-  CONFIG_LINKER_SORT_BY_ALIGNMENT
-  ${LINKERFLAGPREFIX},--sort-common=descending
-  ${LINKERFLAGPREFIX},--sort-section=alignment
-  )
-
 get_property(TOPT GLOBAL PROPERTY TOPT)
-set_ifndef(  TOPT -T)
-
-if(NOT CONFIG_NATIVE_APPLICATION)
-  # Funny thing is if this is set to =error, some architectures will
-  # skip this flag even though the compiler flag check passes
-  # (e.g. ARC and Xtensa). So warning should be the default for now.
-  #
-  # Skip this for native application as Zephyr only provides
-  # additions to the host toolchain linker script. The relocation
-  # sections (.rel*) requires us to override those provided
-  # by host toolchain. As we can't account for all possible
-  # combination of compiler and linker on all machines used
-  # for development, it is better to turn this off.
-  #
-  # CONFIG_LINKER_ORPHAN_SECTION_PLACE is to place the orphan sections
-  # without any warnings or errors, which is the default behavior.
-  # So there is no need to explicity set a linker flag.
-  if(CONFIG_LINKER_ORPHAN_SECTION_WARN)
-    zephyr_ld_options(
-      ${LINKERFLAGPREFIX},--orphan-handling=warn
-      )
-  elseif(CONFIG_LINKER_ORPHAN_SECTION_ERROR)
-    zephyr_ld_options(
-      ${LINKERFLAGPREFIX},--orphan-handling=error
-      )
-  endif()
-endif()
+set_ifndef(  TOPT -Wl,-T) # clang doesn't pick -T for some reason and complains,
+                          # while -Wl,-T works for both, gcc and clang
 
 if(CONFIG_HAVE_CUSTOM_LINKER_SCRIPT)
   set(LINKER_SCRIPT ${APPLICATION_SOURCE_DIR}/${CONFIG_CUSTOM_LINKER_SCRIPT})
@@ -457,62 +407,6 @@ if(CONFIG_CUSTOM_RODATA_LD OR CONFIG_CUSTOM_RWDATA_LD OR CONFIG_CUSTOM_SECTIONS_
 endif()
 
 configure_file(version.h.in ${PROJECT_BINARY_DIR}/include/generated/version.h)
-
-function(construct_add_custom_command_for_linker_pass linker_output_name output_variable)
-  set(extra_dependencies ${ARGN})
-  set(linker_cmd_file_name ${linker_output_name}.cmd)
-
-  if (${linker_output_name} MATCHES "^linker_pass_final$")
-    set(linker_pass_define -DLINKER_PASS2)
-  elseif (${linker_output_name} MATCHES "^linker_app_smem_unaligned$")
-    set(linker_pass_define -DLINKER_APP_SMEM_UNALIGNED)
-  else()
-    set(linker_pass_define "")
-  endif()
-
-  # Different generators deal with depfiles differently.
-  if(CMAKE_GENERATOR STREQUAL "Unix Makefiles")
-    # Note that the IMPLICIT_DEPENDS option is currently supported only
-    # for Makefile generators and will be ignored by other generators.
-    set(linker_script_dep IMPLICIT_DEPENDS C ${LINKER_SCRIPT})
-  elseif(CMAKE_GENERATOR STREQUAL "Ninja")
-    # Using DEPFILE with other generators than Ninja is an error.
-    set(linker_script_dep DEPFILE ${PROJECT_BINARY_DIR}/${linker_cmd_file_name}.dep)
-  else()
-    # TODO: How would the linker script dependencies work for non-linker
-    # script generators.
-    message(STATUS "Warning; this generator is not well supported. The
-  Linker script may not be regenerated when it should.")
-    set(linker_script_dep "")
-  endif()
-
-  zephyr_get_include_directories_for_lang(C current_includes)
-  get_filename_component(base_name ${CMAKE_CURRENT_BINARY_DIR} NAME)
-  get_property(current_defines GLOBAL PROPERTY PROPERTY_LINKER_SCRIPT_DEFINES)
-
-  set(${output_variable}
-    OUTPUT ${linker_cmd_file_name}
-    DEPENDS
-    ${LINKER_SCRIPT}
-    ${extra_dependencies}
-    # NB: 'linker_script_dep' will use a keyword that ends 'DEPENDS'
-    ${linker_script_dep}
-    COMMAND ${CMAKE_C_COMPILER}
-    -x assembler-with-cpp
-    ${NOSYSDEF_CFLAG}
-    -MD -MF ${linker_cmd_file_name}.dep -MT ${base_name}/${linker_cmd_file_name}
-    ${current_includes}
-    ${current_defines}
-    ${linker_pass_define}
-    -E ${LINKER_SCRIPT}
-    -P # Prevent generation of debug `#line' directives.
-    -o ${linker_cmd_file_name}
-    VERBATIM
-    WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
-
-    PARENT_SCOPE
-    )
-endfunction()
 
 # Error-out when the deprecated naming convention is found (until
 # after 1.14.0 has been released)
@@ -603,7 +497,7 @@ endif()
 set(syscall_macros_h ${ZEPHYR_BINARY_DIR}/include/generated/syscall_macros.h)
 
 add_custom_target(${SYSCALL_MACROS_H_TARGET} DEPENDS ${syscall_macros_h})
-add_custom_command(                       OUTPUT  ${syscall_macros_h}
+add_custom_command(                          OUTPUT  ${syscall_macros_h}
   COMMAND
   ${PYTHON_EXECUTABLE}
   ${ZEPHYR_BASE}/scripts/gen_syscall_header.py
@@ -781,18 +675,14 @@ if (CONFIG_CODE_DATA_RELOCATION)
   set(CODE_RELOCATION_DEP code_relocation_source_lib)
 endif() # CONFIG_CODE_DATA_RELOCATION
 
-construct_add_custom_command_for_linker_pass(
-  linker
-  custom_command
-  ${ALIGN_SIZING_DEP}
+configure_linker_script(
+  linker.cmd
+  ""
   ${PRIV_STACK_DEP}
   ${APP_SMEM_ALIGNED_DEP}
   ${CODE_RELOCATION_DEP}
   ${OFFSETS_H_TARGET}
   )
-add_custom_command(
-  ${custom_command}
-)
 
 add_custom_target(
   ${LINKER_SCRIPT_TARGET}
@@ -860,25 +750,8 @@ if(CONFIG_GEN_ISR_TABLES)
 endif()
 
 if(CONFIG_CODE_DATA_RELOCATION)
-   set(MEM_RELOCATAION_LD "${PROJECT_BINARY_DIR}/include/generated/linker_relocate.ld")
-   set(MEM_RELOCATAION_CODE "${PROJECT_BINARY_DIR}/code_relocation.c")
-
-   add_custom_command(
-     OUTPUT ${MEM_RELOCATAION_CODE} ${MEM_RELOCATAION_LD}
-     COMMAND
-     ${PYTHON_EXECUTABLE}
-     ${ZEPHYR_BASE}/scripts/gen_relocate_app.py
-     $<$<BOOL:${CMAKE_VERBOSE_MAKEFILE}>:--verbose>
-     -d ${APPLICATION_BINARY_DIR}
-     -i '$<TARGET_PROPERTY:code_data_relocation_target,COMPILE_DEFINITIONS>'
-     -o ${MEM_RELOCATAION_LD}
-     -c ${MEM_RELOCATAION_CODE}
-     DEPENDS app kernel ${ZEPHYR_LIBS_PROPERTY}
-     )
-
-   add_library(code_relocation_source_lib  STATIC ${MEM_RELOCATAION_CODE})
-   target_link_libraries(code_relocation_source_lib zephyr_interface)
-
+  # @Intent: Linker script to relocate .text, data and .bss sections
+  toolchain_ld_relocation()
 endif()
 
 if(CONFIG_USERSPACE)
@@ -1214,17 +1087,13 @@ if(CONFIG_USERSPACE)
     COMMENT "Generating app_smem_unaligned linker section"
     )
 
-  construct_add_custom_command_for_linker_pass(
-    linker_app_smem_unaligned
-    custom_command
-    ${ALIGN_SIZING_DEP}
+  configure_linker_script(
+    linker_app_smem_unaligned.cmd
+    "-DLINKER_APP_SMEM_UNALIGNED"
     ${CODE_RELOCATION_DEP}
     ${APP_SMEM_UNALIGNED_DEP}
     ${APP_SMEM_UNALIGNED_LD}
     ${OFFSETS_H_TARGET}
-    )
-  add_custom_command(
-    ${custom_command}
     )
 
   add_custom_target(
@@ -1243,7 +1112,7 @@ if(CONFIG_USERSPACE)
   add_executable(       app_smem_unaligned_prebuilt misc/empty_file.c)
   target_link_libraries(app_smem_unaligned_prebuilt ${TOPT} ${PROJECT_BINARY_DIR}/linker_app_smem_unaligned.cmd ${zephyr_lnk} ${CODE_RELOCATION_DEP})
   set_property(TARGET   app_smem_unaligned_prebuilt PROPERTY LINK_DEPENDS ${PROJECT_BINARY_DIR}/linker_app_smem_unaligned.cmd)
-  add_dependencies(     app_smem_unaligned_prebuilt ${ALIGN_SIZING_DEP} linker_app_smem_unaligned_script ${OFFSETS_LIB})
+  add_dependencies(     app_smem_unaligned_prebuilt linker_app_smem_unaligned_script ${OFFSETS_LIB})
 
   add_custom_command(
     OUTPUT ${APP_SMEM_ALIGNED_LD}
@@ -1263,17 +1132,13 @@ if(CONFIG_USERSPACE)
 endif()
 
 if(CONFIG_USERSPACE AND CONFIG_ARM)
-  construct_add_custom_command_for_linker_pass(
-    linker_priv_stacks
-    custom_command
-    ${ALIGN_SIZING_DEP}
+  configure_linker_script(
+    linker_priv_stacks.cmd
+    ""
     ${CODE_RELOCATION_DEP}
     ${APP_SMEM_ALIGNED_DEP}
     ${APP_SMEM_ALIGNED_LD}
     ${OFFSETS_H_TARGET}
-    )
-  add_custom_command(
-    ${custom_command}
     )
 
   add_custom_target(
@@ -1292,14 +1157,14 @@ if(CONFIG_USERSPACE AND CONFIG_ARM)
   add_executable(       priv_stacks_prebuilt misc/empty_file.c)
   target_link_libraries(priv_stacks_prebuilt ${TOPT} ${PROJECT_BINARY_DIR}/linker_priv_stacks.cmd ${zephyr_lnk} ${CODE_RELOCATION_DEP})
   set_property(TARGET   priv_stacks_prebuilt PROPERTY LINK_DEPENDS ${PROJECT_BINARY_DIR}/linker_priv_stacks.cmd)
-  add_dependencies(     priv_stacks_prebuilt ${ALIGN_SIZING_DEP} linker_priv_stacks_script ${OFFSETS_LIB})
+  add_dependencies(     priv_stacks_prebuilt linker_priv_stacks_script ${OFFSETS_LIB})
 endif()
 
 # FIXME: Is there any way to get rid of empty_file.c?
 add_executable(       ${ZEPHYR_PREBUILT_EXECUTABLE} misc/empty_file.c)
 target_link_libraries(${ZEPHYR_PREBUILT_EXECUTABLE} ${TOPT} ${PROJECT_BINARY_DIR}/linker.cmd ${PRIV_STACK_LIB} ${zephyr_lnk} ${CODE_RELOCATION_DEP})
 set_property(TARGET   ${ZEPHYR_PREBUILT_EXECUTABLE} PROPERTY LINK_DEPENDS ${PROJECT_BINARY_DIR}/linker.cmd)
-add_dependencies(     ${ZEPHYR_PREBUILT_EXECUTABLE} ${ALIGN_SIZING_DEP} ${PRIV_STACK_DEP} ${LINKER_SCRIPT_TARGET} ${OFFSETS_LIB})
+add_dependencies(     ${ZEPHYR_PREBUILT_EXECUTABLE} ${PRIV_STACK_DEP} ${LINKER_SCRIPT_TARGET} ${OFFSETS_LIB})
 
 
 set(generated_kernel_files ${GKSF} ${GKOF})
@@ -1314,17 +1179,13 @@ else()
   # The second linker pass uses the same source linker script of the
   # first pass (LINKER_SCRIPT), but this time with a different output
   # file and preprocessed with the define LINKER_PASS2.
-  construct_add_custom_command_for_linker_pass(
-    linker_pass_final
-    custom_command
-    ${ALIGN_SIZING_DEP}
+  configure_linker_script(
+    linker_pass_final.cmd
+    "-DLINKER_PASS2"
     ${PRIV_STACK_DEP}
     ${CODE_RELOCATION_DEP}
     ${ZEPHYR_PREBUILT_EXECUTABLE}
     ${OFFSETS_H_TARGET}
-    )
-  add_custom_command(
-    ${custom_command}
     )
 
   set(LINKER_PASS_FINAL_SCRIPT_TARGET linker_pass_final_script_target)
@@ -1342,7 +1203,7 @@ else()
   add_executable(       ${KERNEL_ELF} misc/empty_file.c ${GKSF})
   target_link_libraries(${KERNEL_ELF} ${GKOF} ${TOPT} ${PROJECT_BINARY_DIR}/linker_pass_final.cmd ${zephyr_lnk} ${CODE_RELOCATION_DEP})
   set_property(TARGET   ${KERNEL_ELF} PROPERTY LINK_DEPENDS ${PROJECT_BINARY_DIR}/linker_pass_final.cmd)
-  add_dependencies(     ${KERNEL_ELF} ${ALIGN_SIZING_DEP} ${PRIV_STACK_DEP} ${LINKER_PASS_FINAL_SCRIPT_TARGET})
+  add_dependencies(     ${KERNEL_ELF} ${PRIV_STACK_DEP} ${LINKER_PASS_FINAL_SCRIPT_TARGET})
 endif()
 
 # Export the variable to the application's scope to allow the

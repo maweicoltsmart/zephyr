@@ -564,7 +564,9 @@ void ll_reset(void)
 	_radio.fc_ack = _radio.fc_req;
 
 	/* reset whitelist and resolving list */
-	ll_filter_reset(false);
+	if (IS_ENABLED(CONFIG_BT_CTLR_FILTER)) {
+		ll_filter_reset(false);
+	}
 
 	/* memory allocations */
 	common_init();
@@ -648,11 +650,11 @@ static inline u32_t addr_us_get(u8_t phy)
 {
 	switch (phy) {
 	default:
-	case BIT(0):
+	case BIT(0): /* 1Mbps */
 		return 40;
-	case BIT(1):
+	case BIT(1): /* 2Mbps */
 		return 24;
-	case BIT(2):
+	case BIT(2): /* Coded */
 		return 376;
 	}
 }
@@ -1920,6 +1922,13 @@ static inline u32_t isr_rx_conn_pkt_ack(struct pdu_data *pdu_data_tx,
 			_radio.conn_curr->pause_tx = 1U;
 		}
 		break;
+
+	case PDU_DATA_LLCTRL_TYPE_REJECT_EXT_IND:
+		if (pdu_data_tx->llctrl.reject_ext_ind.reject_opcode !=
+		    PDU_DATA_LLCTRL_TYPE_ENC_REQ) {
+			break;
+		}
+		/* Pass through */
 
 	case PDU_DATA_LLCTRL_TYPE_REJECT_IND:
 		/* resume data packet rx and tx */
@@ -4614,6 +4623,7 @@ static inline void isr_close_conn(void)
 static inline void isr_radio_state_close(void)
 {
 	u32_t dont_close = 0U;
+	int err;
 
 	switch (_radio.role) {
 	case ROLE_ADV:
@@ -4667,7 +4677,10 @@ static inline void isr_radio_state_close(void)
 
 	event_inactive(0, 0, 0, NULL);
 
-	clock_control_off(_radio.hf_clock, NULL);
+	err = clock_control_off(_radio.hf_clock, NULL);
+	if (!err) {
+		DEBUG_RADIO_XTAL(0);
+	}
 
 	mayfly_enable(RADIO_TICKER_USER_ID_WORKER, RADIO_TICKER_USER_ID_JOB, 1);
 
@@ -4936,10 +4949,15 @@ static void event_inactive(u32_t ticks_at_expire, u32_t remainder,
 
 static void mayfly_xtal_start(void *params)
 {
+	int err;
+
 	ARG_UNUSED(params);
 
 	/* turn on 16MHz clock, non-blocking mode. */
-	clock_control_on(_radio.hf_clock, NULL);
+	err = clock_control_on(_radio.hf_clock, NULL);
+	LL_ASSERT(!err || (err == -EINPROGRESS));
+
+	DEBUG_RADIO_XTAL(1);
 }
 
 static void event_xtal(u32_t ticks_at_expire, u32_t remainder,
@@ -4963,9 +4981,14 @@ static void event_xtal(u32_t ticks_at_expire, u32_t remainder,
 
 static void mayfly_xtal_stop(void *params)
 {
+	int err;
+
 	ARG_UNUSED(params);
 
-	clock_control_off(_radio.hf_clock, NULL);
+	err = clock_control_off(_radio.hf_clock, NULL);
+	if (!err) {
+		DEBUG_RADIO_XTAL(0);
+	}
 
 	DEBUG_RADIO_CLOSE(0);
 }
@@ -6490,18 +6513,16 @@ static void event_adv(u32_t ticks_at_expire, u32_t remainder,
 #endif /* CONFIG_BT_HCI_MESH_EXT */
 
 
-#if defined(CONFIG_BT_CTLR_PRIVACY)
-	if (ctrl_rl_enabled()) {
+	/* Setup Radio Filter */
+	if (IS_ENABLED(CONFIG_BT_CTLR_PRIVACY) && ctrl_rl_enabled()) {
 		struct ll_filter *filter =
 			ctrl_filter_get(!!(_radio.advertiser.filter_policy));
 
 		radio_filter_configure(filter->enable_bitmask,
 				       filter->addr_type_bitmask,
 				       (u8_t *)filter->bdaddr);
-	} else
-#endif /* CONFIG_BT_CTLR_PRIVACY */
-	/* Setup Radio Filter */
-	if (_radio.advertiser.filter_policy) {
+	} else if (IS_ENABLED(CONFIG_BT_CTLR_FILTER) &&
+		   _radio.advertiser.filter_policy) {
 
 		struct ll_filter *wl = ctrl_filter_get(true);
 
@@ -6582,6 +6603,13 @@ static void mayfly_adv_stop(void *param)
 
 static inline void ticker_stop_adv_stop_active(void)
 {
+#if defined(CONFIG_BT_CTLR_XTAL_ADVANCED)
+	static memq_link_t link_calc;
+	static struct mayfly s_mfy_xtal_calc = {0, 0, &link_calc,
+						(void *)RADIO_TICKER_ID_ADV,
+						mayfly_xtal_stop_calc};
+#endif /* CONFIG_BT_CTLR_XTAL_ADVANCED */
+
 	static memq_link_t link_inact;
 	static struct mayfly s_mfy_radio_inactive = {0, 0, &link_inact, NULL,
 						     mayfly_radio_inactive};
@@ -6660,6 +6688,17 @@ static inline void ticker_stop_adv_stop_active(void)
 						RADIO_TICKER_USER_ID_WORKER, 0,
 						&s_mfy_xtal_stop);
 				LL_ASSERT(!ret);
+
+#if defined(CONFIG_BT_CTLR_XTAL_ADVANCED)
+				/* calc whether xtal needs to be retained after
+				 * this event
+				 */
+				ret = mayfly_enqueue(
+						RADIO_TICKER_USER_ID_JOB,
+						RADIO_TICKER_USER_ID_JOB, 0,
+						&s_mfy_xtal_calc);
+				LL_ASSERT(!ret);
+#endif /* CONFIG_BT_CTLR_XTAL_ADVANCED */
 			}
 		} else if (ret_cb_m0 == TICKER_STATUS_FAILURE) {
 			/* Step 2.1.2: Deassert Radio Active and XTAL start */
@@ -6675,6 +6714,16 @@ static inline void ticker_stop_adv_stop_active(void)
 					     RADIO_TICKER_USER_ID_WORKER, 0,
 					     &s_mfy_xtal_stop);
 			LL_ASSERT(!ret);
+
+#if defined(CONFIG_BT_CTLR_XTAL_ADVANCED)
+			/* calc whether xtal needs to be retained after this
+			 * event
+			 */
+			ret = mayfly_enqueue(RADIO_TICKER_USER_ID_JOB,
+					     RADIO_TICKER_USER_ID_JOB, 0,
+					     &s_mfy_xtal_calc);
+			LL_ASSERT(!ret);
+#endif /* CONFIG_BT_CTLR_XTAL_ADVANCED */
 		} else {
 			LL_ASSERT(0);
 		}
@@ -6695,6 +6744,16 @@ static inline void ticker_stop_adv_stop_active(void)
 						RADIO_TICKER_USER_ID_WORKER, 0,
 						&s_mfy_radio_stop);
 			LL_ASSERT(!ret);
+
+#if defined(CONFIG_BT_CTLR_XTAL_ADVANCED)
+			/* calc whether xtal needs to be retained after this
+			 * event
+			 */
+			ret = mayfly_enqueue(RADIO_TICKER_USER_ID_JOB,
+					     RADIO_TICKER_USER_ID_JOB, 0,
+					     &s_mfy_xtal_calc);
+			LL_ASSERT(!ret);
+#endif /* CONFIG_BT_CTLR_XTAL_ADVANCED */
 
 			/* NOTE: Cannot wait here for the event to finish
 			 * as we need to let radio ISR to execute if we are in
@@ -6863,8 +6922,8 @@ static void event_scan(u32_t ticks_at_expire, u32_t remainder, u16_t lazy,
 	radio_pkt_rx_set(_radio.packet_rx[_radio.packet_rx_last]->pdu_data);
 	radio_rssi_measure();
 
-#if defined(CONFIG_BT_CTLR_PRIVACY)
-	if (ctrl_rl_enabled()) {
+	/* Setup Radio Filter */
+	if (IS_ENABLED(CONFIG_BT_CTLR_PRIVACY) && ctrl_rl_enabled()) {
 		struct ll_filter *filter =
 			ctrl_filter_get(!!(_radio.scanner.filter_policy & 0x1));
 		u8_t count, *irks = ctrl_irks_get(&count);
@@ -6874,11 +6933,8 @@ static void event_scan(u32_t ticks_at_expire, u32_t remainder, u16_t lazy,
 				       (u8_t *)filter->bdaddr);
 
 		radio_ar_configure(count, irks);
-	} else
-#endif /* CONFIG_BT_CTLR_PRIVACY */
-	/* Setup Radio Filter */
-	if (_radio.scanner.filter_policy) {
-
+	} else if (IS_ENABLED(CONFIG_BT_CTLR_FILTER) &&
+		   _radio.scanner.filter_policy) {
 		struct ll_filter *wl = ctrl_filter_get(true);
 
 		radio_filter_configure(wl->enable_bitmask,
@@ -10308,6 +10364,12 @@ static inline void role_active_disable(u8_t ticker_id_stop,
 				       u32_t ticks_xtal_to_start,
 				       u32_t ticks_active_to_start)
 {
+#if defined(CONFIG_BT_CTLR_XTAL_ADVANCED)
+	static memq_link_t link_calc;
+	static struct mayfly s_mfy_xtal_calc = {0, 0, &link_calc, NULL,
+						mayfly_xtal_stop_calc};
+#endif /* CONFIG_BT_CTLR_XTAL_ADVANCED */
+
 	static memq_link_t link_inact;
 	static struct mayfly s_mfy_radio_inactive = {0, 0, &link_inact, NULL,
 						     mayfly_radio_inactive};
@@ -10376,6 +10438,19 @@ static inline void role_active_disable(u8_t ticker_id_stop,
 						RADIO_TICKER_USER_ID_WORKER, 0,
 						&s_mfy_xtal_stop);
 				LL_ASSERT(!ret);
+
+#if defined(CONFIG_BT_CTLR_XTAL_ADVANCED)
+				/* calc whether xtal needs to be retained after
+				 * this event
+				 */
+				s_mfy_xtal_calc.param =
+					(void *)(u32_t)_radio.ticker_id_stop;
+				ret = mayfly_enqueue(
+						RADIO_TICKER_USER_ID_APP,
+						RADIO_TICKER_USER_ID_JOB, 0,
+						&s_mfy_xtal_calc);
+				LL_ASSERT(!ret);
+#endif /* CONFIG_BT_CTLR_XTAL_ADVANCED */
 			}
 		} else if (ret_cb_m0 == TICKER_STATUS_FAILURE) {
 			/* Step 2.1.2: Deassert Radio Active and XTAL start */
@@ -10391,6 +10466,18 @@ static inline void role_active_disable(u8_t ticker_id_stop,
 					     RADIO_TICKER_USER_ID_WORKER, 0,
 					     &s_mfy_xtal_stop);
 			LL_ASSERT(!ret);
+
+#if defined(CONFIG_BT_CTLR_XTAL_ADVANCED)
+			/* calc whether xtal needs to be retained after this
+			 * event
+			 */
+			s_mfy_xtal_calc.param =
+				(void *)(u32_t)_radio.ticker_id_stop;
+			ret = mayfly_enqueue(RADIO_TICKER_USER_ID_APP,
+					     RADIO_TICKER_USER_ID_JOB, 0,
+					     &s_mfy_xtal_calc);
+			LL_ASSERT(!ret);
+#endif /* CONFIG_BT_CTLR_XTAL_ADVANCED */
 		} else {
 			LL_ASSERT(0);
 		}
@@ -10438,6 +10525,18 @@ static inline void role_active_disable(u8_t ticker_id_stop,
 					     RADIO_TICKER_USER_ID_WORKER, 0,
 					     &s_mfy_radio_stop);
 			LL_ASSERT(!ret);
+
+#if defined(CONFIG_BT_CTLR_XTAL_ADVANCED)
+			/* calc whether xtal needs to be retained after this
+			 * event
+			 */
+			s_mfy_xtal_calc.param =
+				(void *)(u32_t)_radio.ticker_id_stop;
+			ret = mayfly_enqueue(RADIO_TICKER_USER_ID_APP,
+					     RADIO_TICKER_USER_ID_JOB, 0,
+					     &s_mfy_xtal_calc);
+			LL_ASSERT(!ret);
+#endif /* CONFIG_BT_CTLR_XTAL_ADVANCED */
 
 			/* wait for radio ISR to exit */
 			while (_radio.role != ROLE_NONE) {

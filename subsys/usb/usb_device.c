@@ -519,6 +519,10 @@ static bool usb_set_configuration(u8_t config_index, u8_t alt_setting)
 		case DESC_CONFIGURATION:
 			/* remember current configuration index */
 			cur_config = p[CONF_DESC_bConfigurationValue];
+			if (cur_config == config_index) {
+				found = true;
+			}
+
 			break;
 
 		case DESC_INTERFACE:
@@ -1142,7 +1146,15 @@ int usb_disable(void)
 
 int usb_write(u8_t ep, const u8_t *data, u32_t data_len, u32_t *bytes_ret)
 {
-	return usb_dc_ep_write(ep, data, data_len, bytes_ret);
+	while (true) {
+		int ret = usb_dc_ep_write(ep, data, data_len, bytes_ret);
+
+		if (ret != -EAGAIN) {
+			return ret;
+		}
+
+		k_yield();
+	}
 }
 
 int usb_read(u8_t ep, u8_t *data, u32_t max_data_len, u32_t *ret_bytes)
@@ -1200,14 +1212,15 @@ static void usb_transfer_work(struct k_work *item)
 	if (trans->flags & USB_TRANS_WRITE) {
 		if (!trans->bsize) {
 			if (!(trans->flags & USB_TRANS_NO_ZLP)) {
-				usb_dc_ep_write(ep, NULL, 0, NULL);
+				usb_write(ep, NULL, 0, NULL);
 			}
 			trans->status = 0;
 			goto done;
 		}
 
-		ret = usb_dc_ep_write(ep, trans->buffer, trans->bsize, &bytes);
+		ret = usb_write(ep, trans->buffer, trans->bsize, &bytes);
 		if (ret) {
+			LOG_ERR("Transfer error %d", ret);
 			/* transfer error */
 			trans->status = -EINVAL;
 			goto done;

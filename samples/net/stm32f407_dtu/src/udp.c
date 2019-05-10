@@ -9,12 +9,13 @@ LOG_MODULE_REGISTER(net_echo_server_sample, LOG_LEVEL_ERR);
 #include <zephyr.h>
 #include <kernel.h>
 #include <json.h>
+#include "dtunvs.h"
 
 #define MY_PORT	5000
-#define SERVER_PORT 4999
+#define SERVER_PORT 5001
 #define BUFF_LEN 1024
 /* size of stack area used by each thread */
-#define STACKSIZE 1024
+#define STACKSIZE (1024 * 4)
 
 /* scheduling priority used by each thread */
 #define PRIORITY 7
@@ -162,6 +163,7 @@ struct configs conf = {
 };
 
 extern char localip[];
+extern struct k_sem got_address;
 
 static int start_udp_proto(struct data *data, struct sockaddr *bind_addr,
 			   socklen_t bind_addrlen)
@@ -213,12 +215,12 @@ static int process_udp(struct data *data)
 		if(memcmp(data->udp.recv_buffer,"www.coltsmart.com",17) == 0)
 		{
 			struct scanrsp_struct rsp = {
-				.dev_ip = localip,
-				.dev_name = "device001",
-				.dev_mac = "201905040001",
-				.dev_version = "V1.0",
-				.dev_id = "2019050400000001",
-				.dev_type = "ETH_DTU",
+				.dev_ip = dtu_param_nvs.dev_ip,
+				.dev_name = dtu_param_nvs.dev_name,
+				.dev_mac = dtu_param_nvs.dev_mac,
+				.dev_version = dtu_param_nvs.dev_version,
+				.dev_id = dtu_param_nvs.dev_id,
+				.dev_type = dtu_param_nvs.dev_type,
 			};
 			memset(data->udp.recv_buffer,0,RECV_BUFFER_SIZE);
 			ret = json_obj_encode_buf(scanrspdes, ARRAY_SIZE(scanrspdes),
@@ -244,20 +246,20 @@ static int process_udp(struct data *data)
 		else if(memcmp(data->udp.recv_buffer,"get net param",13) == 0)
 		{
 			struct getnetparam_struct rspnet = {
-				.conn2mj = true,
-				.iptype = "DHCP",
-				.dev_name = "device001",
-				.dev_mac = "201905040001",
-				.dev_id = "2019050400000001",
-				.user_name = "coltsmart",
-				.user_pwd = "www.coltsmart.com",
-				.dev_ip = localip,
-				.net_mask = "255.255.255.255",
-				.gateway = "192.168.1.1",
-				.work_type = "TCP Sever",
-				.dest_ip = "192.168.1.2",
-				.dest_port = 4999,
-				.local_port = 5000,
+				.conn2mj = dtu_param_nvs.conn2mj,
+				.iptype = dtu_param_nvs.iptype,
+				.dev_name = dtu_param_nvs.dev_name,
+				.dev_mac = dtu_param_nvs.dev_mac,
+				.dev_id = dtu_param_nvs.dev_id,
+				.user_name = dtu_param_nvs.user_name,
+				.user_pwd = dtu_param_nvs.user_pwd,
+				.dev_ip = dtu_param_nvs.dev_ip,
+				.net_mask = dtu_param_nvs.net_mask,
+				.gateway = dtu_param_nvs.gateway,
+				.work_type = dtu_param_nvs.work_type,
+				.dest_ip = dtu_param_nvs.dest_ip,
+				.dest_port = dtu_param_nvs.dest_port,
+				.local_port = dtu_param_nvs.local_port,
 			};
 			memset(data->udp.recv_buffer,0,RECV_BUFFER_SIZE);
 			ret = json_obj_encode_buf(respnetdes, ARRAY_SIZE(respnetdes),
@@ -285,26 +287,26 @@ static int process_udp(struct data *data)
 			struct getcomparam_struct rspserial = {
 				.serial = {
 					[0] = { 
-						.protocol = "RS232",
-						.baud = 115200,
-						.databit = "8",
-						.stopbit = "1",
-						.paritybit = "None",
-						.flowctrl = "None",
-						.timeout = 5,
-						.maxlen = 1024,
-						.autobaud = false,
+						.protocol = dtu_param_nvs.com[0].protocol,
+						.baud = dtu_param_nvs.com[0].baud,
+						.databit = dtu_param_nvs.com[0].databit,
+						.stopbit = dtu_param_nvs.com[0].stopbit,
+						.paritybit = dtu_param_nvs.com[0].paritybit,
+						.flowctrl = dtu_param_nvs.com[0].flowctrl,
+						.timeout = dtu_param_nvs.com[0].timeout,
+						.maxlen = dtu_param_nvs.com[0].maxlen,
+						.autobaud = dtu_param_nvs.com[0].autobaud,
 					},
 					[1] = {
-						.protocol = "RS485",
-						.baud = 115200,
-						.databit = "8",
-						.stopbit = "1",
-						.paritybit = "None",
-						.flowctrl = "None",
-						.timeout = 5,
-						.maxlen = 1024,
-						.autobaud = false,
+						.protocol = dtu_param_nvs.com[1].protocol,
+						.baud = dtu_param_nvs.com[1].baud,
+						.databit = dtu_param_nvs.com[1].databit,
+						.stopbit = dtu_param_nvs.com[1].stopbit,
+						.paritybit = dtu_param_nvs.com[1].paritybit,
+						.flowctrl = dtu_param_nvs.com[1].flowctrl,
+						.timeout = dtu_param_nvs.com[1].timeout,
+						.maxlen = dtu_param_nvs.com[1].maxlen,
+						.autobaud = dtu_param_nvs.com[1].autobaud,
 					},
 				},
 				.num_serial = 2,
@@ -350,11 +352,67 @@ static int process_udp(struct data *data)
 				else
 				{
 					printk("serial conf\r\n");
+					for(int i = 0;i < 2;i ++)
+					{
+						memset(dtu_param_nvs.com[i].protocol,0,NVS_STRING_MAX_LEN);
+						memset(dtu_param_nvs.com[i].databit,0,NVS_STRING_MAX_LEN);
+						memset(dtu_param_nvs.com[i].stopbit,0,NVS_STRING_MAX_LEN);
+						memset(dtu_param_nvs.com[i].paritybit,0,NVS_STRING_MAX_LEN);
+						memset(dtu_param_nvs.com[i].flowctrl,0,NVS_STRING_MAX_LEN);
+
+
+						strcpy(dtu_param_nvs.com[0].protocol,comparam.serial[i].protocol);
+						dtu_param_nvs.com[0].baud = comparam.serial[i].baud;
+						strcpy(dtu_param_nvs.com[0].databit,comparam.serial[i].databit);
+						strcpy(dtu_param_nvs.com[0].stopbit,comparam.serial[i].stopbit);
+						strcpy(dtu_param_nvs.com[0].paritybit,comparam.serial[i].paritybit);
+						strcpy(dtu_param_nvs.com[0].flowctrl,comparam.serial[i].flowctrl);
+						dtu_param_nvs.com[0].timeout = comparam.serial[i].timeout;
+						dtu_param_nvs.com[0].maxlen = comparam.serial[i].maxlen;
+						dtu_param_nvs.com[0].autobaud = comparam.serial[i].autobaud;
+						k_sem_give(&dtu_param_nvs_restore);
+						//dtu_nvs_restore();
+						//dtu_nvs_init();
+					}
+
 				}
 			}
 			else
 			{
 				printk("net conf\r\n");
+				memset(dtu_param_nvs.dev_ip,0,NVS_STRING_MAX_LEN);
+				memset(dtu_param_nvs.dev_name,0,NVS_STRING_MAX_LEN);
+				memset(dtu_param_nvs.dev_id,0,NVS_STRING_MAX_LEN);
+				memset(dtu_param_nvs.dev_mac,0,NVS_STRING_MAX_LEN);
+				memset(dtu_param_nvs.dev_version,0,NVS_STRING_MAX_LEN);
+				memset(dtu_param_nvs.dev_type,0,NVS_STRING_MAX_LEN);
+				memset(dtu_param_nvs.iptype,0,NVS_STRING_MAX_LEN);
+				memset(dtu_param_nvs.user_name,0,NVS_STRING_MAX_LEN);
+				memset(dtu_param_nvs.user_pwd,0,NVS_STRING_MAX_LEN);
+				memset(dtu_param_nvs.net_mask,0,NVS_STRING_MAX_LEN);
+				memset(dtu_param_nvs.gateway,0,NVS_STRING_MAX_LEN);
+				memset(dtu_param_nvs.work_type,0,NVS_STRING_MAX_LEN);
+				memset(dtu_param_nvs.dest_ip,0,NVS_STRING_MAX_LEN);
+
+				strcpy(dtu_param_nvs.dev_ip,netparam.dev_ip);
+				strcpy(dtu_param_nvs.dev_name,netparam.dev_name);
+				strcpy(dtu_param_nvs.dev_id,netparam.dev_id);
+				strcpy(dtu_param_nvs.dev_mac,netparam.dev_mac);
+				//strcpy(dtu_param_nvs.dev_version,netparam.dev_version);
+				//strcpy(dtu_param_nvs.dev_type,netparam.dev_type);
+				dtu_param_nvs.conn2mj = netparam.conn2mj;
+				strcpy(dtu_param_nvs.iptype,netparam.iptype);
+				strcpy(dtu_param_nvs.user_name,netparam.user_name);
+				strcpy(dtu_param_nvs.user_pwd,netparam.user_pwd);
+				strcpy(dtu_param_nvs.net_mask,netparam.net_mask);
+				strcpy(dtu_param_nvs.gateway,netparam.gateway);
+				strcpy(dtu_param_nvs.work_type,netparam.work_type);
+				strcpy(dtu_param_nvs.dest_ip,netparam.dest_ip);
+				dtu_param_nvs.dest_port = netparam.dest_port;
+				dtu_param_nvs.local_port = netparam.local_port;
+				k_sem_give(&dtu_param_nvs_restore);
+				//dtu_nvs_restore();
+				//dtu_nvs_init();
 			}
 		}
 		if (++data->udp.counter % 1000 == 0U) {
@@ -374,6 +432,10 @@ void udp_conf_process(void)
 	int ret;
 	struct sockaddr_in addr4;
 
+	//k_sem_take(&got_address,K_FOREVER);
+	//sleep(1);
+	//dtu_nvs_init();
+
 	(void)memset(&addr4, 0, sizeof(addr4));
 	addr4.sin_family = AF_INET;
 	addr4.sin_port = htons(MY_PORT);
@@ -392,5 +454,5 @@ void udp_conf_process(void)
 		}
 	}
 }
-K_THREAD_DEFINE(udp_conf_process_id, STACKSIZE, udp_conf_process, NULL, NULL, NULL,
-		PRIORITY, 0, K_NO_WAIT);
+/*K_THREAD_DEFINE(udp_conf_process_id, STACKSIZE, udp_conf_process, NULL, NULL, NULL,
+		PRIORITY, 0, K_NO_WAIT);*/

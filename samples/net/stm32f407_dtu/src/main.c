@@ -20,6 +20,7 @@ LOG_MODULE_REGISTER(net_dhcpv4_client_sample, LOG_LEVEL_DBG);
 #include <net/net_context.h>
 #include <net/net_mgmt.h>
 #include <gpio.h>
+#include "dtunvs.h"
 
 #define GPIO_OUT_DRV_NAME LED2_GPIO_CONTROLLER
 #define GPIO_OUT_PIN  LED2_GPIO_PIN
@@ -66,7 +67,9 @@ static void handler(struct net_mgmt_event_callback *cb,
 						 &iface->config.ip.ipv4->gw,
 						 buf, sizeof(buf))));
 		if (!notified) {
+			//dtu_nvs_init();
 			k_sem_give(&got_address);
+			//dtu_nvs_restore();
 			notified = true;
 		}
 		break;

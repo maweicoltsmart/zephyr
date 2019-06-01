@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: Apache-2.0
+
+cmake_minimum_required(VERSION 3.13.1)
+include($ENV{ZEPHYR_BASE}/cmake/app/boilerplate.cmake NO_POLICY_SCOPE)
+project(threads)
+
+include_directories(src/Radio)
+include_directories(src/Radio/sx1276)
+include_directories(src/Mac)
+include_directories(src/Mac/crypto)
+
+target_sources(app PRIVATE src/main.c)
+target_sources(app PRIVATE src/Radio/sx1276/sx1276.c)
+target_sources(app PRIVATE src/Radio/spi-board.c)
+target_sources(app PRIVATE src/Radio/sx1276-board.c)
+target_sources(app PRIVATE src/Mac/LoRaMac.c)
+target_sources(app PRIVATE src/Mac/cfg_parm.c)
+target_sources(app PRIVATE src/Mac/utilities.c)
+target_sources(app PRIVATE src/Mac/crypto/LoRaMacCrypto.c)
+target_sources(app PRIVATE src/Mac/crypto/aes.c)
+target_sources(app PRIVATE src/Mac/crypto/cmac.c)

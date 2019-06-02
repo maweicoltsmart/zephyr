@@ -1,0 +1,43 @@
+# Kconfig - STM32 Nucleo-64 development board with STM32F030R8 MCU
+#
+# Copyright (c) 2017 RnDity Sp. z o.o.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+if BOARD_CAR_PARK_LOCK_HMC5983
+
+config BOARD
+	default "car_park_hmc5983"
+
+if UART_CONSOLE
+
+config UART_2
+	default y
+
+endif # UART_CONSOLE
+
+# Disable ports D and F to allow kernel test cases common and
+# contex to run on car_park_hmc5983.
+# Test cases fail due to 'SRAM' region overflow.
+if GPIO
+
+config GPIO_STM32_PORTD
+	default n
+
+config GPIO_STM32_PORTF
+	default y
+
+endif # GPIO
+
+if I2C
+
+config I2C_1
+	default n
+
+config I2C_2
+	default y
+
+endif
+
+endif # BOARD_CAR_PARK_LOCK_HMC5983

@@ -46,7 +46,7 @@
 		};
 		motor_key1: key1 {
 			label = "Motor1";
-			gpios = <&gpioa 1 GPIO_INT_ACTIVE_LOW>;
+			gpios = <&gpioa 0 GPIO_INT_ACTIVE_LOW>;
 		};
 		motor_key2: key2 {
 			label = "Motor2";

@@ -43,7 +43,7 @@
 #include "radio.h"
 
 /* size of stack area used by each thread */
-#define STACKSIZE 512
+#define STACKSIZE 256
 
 /* scheduling priority used by each thread */
 #define PRIORITY 7

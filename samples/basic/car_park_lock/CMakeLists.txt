@@ -10,6 +10,8 @@ include_directories(src/Mac)
 include_directories(src/Mac/crypto)
 
 target_sources(app PRIVATE src/main.c)
+target_sources(app PRIVATE src/button.c)
+target_sources(app PRIVATE src/motor.c)
 target_sources(app PRIVATE src/Radio/sx1276/sx1276.c)
 target_sources(app PRIVATE src/Radio/spi-board.c)
 target_sources(app PRIVATE src/Radio/sx1276-board.c)

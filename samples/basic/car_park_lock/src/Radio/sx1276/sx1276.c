@@ -228,7 +228,7 @@ TimerEvent_t RxTimeoutSyncWord;
 void SX1276Init( RadioEvents_t *events )
 {
     uint8_t i;
-    //static uint8_t chipversion;
+    static uint8_t chipversion;
 
     RadioEvents = events;
 
@@ -238,7 +238,8 @@ void SX1276Init( RadioEvents_t *events )
     TimerInit( &RxTimeoutSyncWord, SX1276OnTimeoutIrq );
 
     SX1276Reset( );
-    //chipversion = SX1276Read(0x42);
+    chipversion = SX1276Read(0x42);
+    printk("chipversion is 0x%02X\r\n",chipversion);
     RxChainCalibration( );
 
     SX1276SetOpMode( RF_OPMODE_SLEEP );

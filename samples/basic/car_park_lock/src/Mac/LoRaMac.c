@@ -41,9 +41,11 @@
 #include "LoRaMacCrypto.h"
 #include "cfg_parm.h"
 #include "radio.h"
+#include "sx1276-board.h"
+#include "spi-board.h"
 
 /* size of stack area used by each thread */
-#define STACKSIZE 256
+#define STACKSIZE 512
 
 /* scheduling priority used by each thread */
 #define PRIORITY 7
@@ -128,6 +130,7 @@ static void RadioSetTx(void)
     }
     if(enablechannel < 1)
     {
+        printk("%s ,%d\r\n",__func__,__LINE__);
         return;
     }
     uint8_t loop3 = 0;
@@ -156,17 +159,10 @@ static void RadioSetRx(void)
 
 static void LoRaMacOnRadioTxDone( void )
 {
-    //TxDoneTimerTick = TimerGetCurrentTime( );
-    if(stTmpCfgParm.netState >= LORAMAC_JOINED)
-    {
-        stTmpCfgParm.netState = LORAMAC_TX_DONE;
-        //onEvent(EV_TXCOMPLETE);
-    }
-    if(stTmpCfgParm.netState < LORAMAC_JOINED)
-    {
-        stTmpCfgParm.netState = LORAMAC_JOIN_TX_DONE;
-    }
-    Radio.Sleep( );
+    printk("%s ,%d\r\n",__func__,__LINE__);
+    
+    RadioSetRx();
+    Radio.Rx(0);
     ////RTC_WakeUpCmd(ENABLE);
 }
 
@@ -192,7 +188,6 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
     uint8_t *appSKey = stTmpCfgParm.LoRaMacAppSKey;
 
     bool isMicOk = false;
-    
     Radio.Sleep( );
 
     macHdr.Value = payload[pktHeaderLen++];
@@ -233,6 +228,8 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
                 stTmpCfgParm.ChannelMask[2] = (stTmpCfgParm.LoRaMacNetID & 0x00ff0000) >> 16;
                 stTmpCfgParm.netState = LORAMAC_JOINED;
                 cfg_parm_restore();
+                printk("%s, %d\r\n",__func__,__LINE__);
+                
                 //onEvent(EV_JOINED);
             }
             break;
@@ -358,37 +355,26 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
         default:
                 break;
     }
+    RadioSetRx();
+    Radio.Rx(0);
 }
 
 static void LoRaMacOnRadioTxTimeout( void )
 {
-    Radio.Sleep( );
-    if(stTmpCfgParm.netState >= LORAMAC_JOINED)
-    {
-        stTmpCfgParm.netState = LORAMAC_JOINED_IDLE;
-    }
-    if(stTmpCfgParm.netState < LORAMAC_JOINED)
-    {
-        stTmpCfgParm.netState = LORAMAC_IDLE;
-    }
+    RadioSetRx();
+    Radio.Rx(0);
 }
 
 static void LoRaMacOnRadioRxError( void )
 {
-    Radio.Sleep( );
-    /*if(stTmpCfgParm.netState > LORAMAC_JOINED)
-    {
-        stTmpCfgParm.netState = LORAMAC_JOINED_IDLE;
-    }*/
+    RadioSetRx();
+    Radio.Rx(0);
 }
 
 static void LoRaMacOnRadioRxTimeout( void )
 {
-    Radio.Sleep( );
-    /*if(stTmpCfgParm.netState > LORAMAC_JOINED)
-    {
-        stTmpCfgParm.netState = LORAMAC_JOINED_IDLE;
-    }*/
+    RadioSetRx();
+    Radio.Rx(0);
 }
 
 void LoRaMacOnRadioCadDone( bool channelActivityDetected )
@@ -520,6 +506,9 @@ LoRaMacStatus_t LoRaMacInitialization( void )
     //modem_init ();
     //PWR_UltraLowPowerCmd(DISABLE); // TIM2 ±÷”ª·”–—”≥Ÿ
     BoardDisableIrq();
+    cfg_parm_factory_reset();
+    SpiInit();
+    SX1276IoInit();
     //TIM4_Config();
     LoRaMacRadioEvents.TxDone = LoRaMacOnRadioTxDone;
     LoRaMacRadioEvents.RxDone = LoRaMacOnRadioRxDone;
@@ -527,9 +516,7 @@ LoRaMacStatus_t LoRaMacInitialization( void )
     LoRaMacRadioEvents.TxTimeout = LoRaMacOnRadioTxTimeout;
     LoRaMacRadioEvents.RxTimeout = LoRaMacOnRadioRxTimeout;
     LoRaMacRadioEvents.CadDone = LoRaMacOnRadioCadDone;
-
     Radio.Init( &LoRaMacRadioEvents );
-
     //factory = 433000000;
     // RadioSetTx();
     // RadioSetRx();    
@@ -547,82 +534,19 @@ LoRaMacStatus_t LoRaMacInitialization( void )
 }
 
 void LoRaMacStateCheck( void )
-{
+{    
     LoRaMacInitialization();
-    while(stTmpCfgParm.inNetMode == true)
+    while(true)
     {
-        switch(stTmpCfgParm.netState)
+        if(stTmpCfgParm.netState == LORAMAC_IDLE)
         {
-            case LORAMAC_IDLE:
-              SendJoinRequest();
-              stTmpCfgParm.netState = LORAMAC_JOINING;
-              break;
-            case LORAMAC_JOINING:
-              k_sleep(K_FOREVER);
-              break;
-            case LORAMAC_JOIN_TX_DONE:
-              if(1)//TimerGetElapsedTime(TxDoneTimerTick) < 900)
-              {
-                  
-              }
-              else
-              {
-                  RadioSetRx();
-                  Radio.Rx(2200);
-                  stTmpCfgParm.netState = LORAMAC_JOINING_WAIT_ACCEPT1;
-              }
-              break;
-            case LORAMAC_JOINING_WAIT_ACCEPT1:
-              if(1)//TimerGetElapsedTime(TxDoneTimerTick) < 3100)
-              {
-              }
-              else
-              {
-                  stTmpCfgParm.netState = LORAMAC_IDLE;
-              }
-              break;
-            case LORAMAC_JOINING_WAIT_ACCEPT2:
-              break;
-            case LORAMAC_JOINED:
-              stTmpCfgParm.netState = LORAMAC_JOINED_IDLE;
-              break;
-            case LORAMAC_JOINED_IDLE:
-              //if(GetRunModePin() == En_Normal_Mode)
-              {
-                  // macHdr.Bits.RFU = CLASS_C;
-                  RadioSetRx();
-                  Radio.Rx(0);
-              }
-              break;
-            case LORAMAC_TX_ING:
-
-              break;
-            case LORAMAC_TX_DONE:
-              if(1)//TimerGetElapsedTime(TxDoneTimerTick) < 900)
-              {
-                  
-              }
-              else
-              {
-                  RadioSetRx();
-                  Radio.Rx(2200);
-                  stTmpCfgParm.netState = LORAMAC_TX_WAIT_RESP1;
-              }
-              break;
-            case LORAMAC_TX_WAIT_RESP1:
-              if(1)//TimerGetElapsedTime(TxDoneTimerTick) < 3100)
-              {
-                  
-              }
-              else
-              {
-                  stTmpCfgParm.netState = LORAMAC_JOINED_IDLE;
-              }
-              break;
-             case LORAMAC_TX_WAIT_RESP2:
-              break;
-            default:
-              break;
+            SendJoinRequest();
+            k_sleep(K_MSEC(8000));
+            
+        }
+        else
+        {
+            k_sleep(K_MSEC(5000));
         }
     }
 }
@@ -641,21 +565,27 @@ void LoRaRadioEventCheck( void )
     while(1)
     {
         k_msgq_get(&radio_msgq, &radio_event, K_FOREVER);
+        
         switch(radio_event.event)
         {
             case SX1276_DIO_0_IRQ_EVENT:
+                //printk("%s ,%d\r\n",__func__,__LINE__);
                 SX1276OnDio0Irq(NULL);
                 break;
             case SX1276_DIO_1_IRQ_EVENT:
+                //printk("%s ,%d\r\n",__func__,__LINE__);
                 SX1276OnDio1Irq(NULL);
                 break;
             case SX1276_DIO_2_IRQ_EVENT:
+                //printk("%s ,%d\r\n",__func__,__LINE__);
                 SX1276OnDio2Irq(NULL);
                 break;
             case SX1276_DIO_3_IRQ_EVENT:
+                //printk("%s ,%d\r\n",__func__,__LINE__);
                 SX1276OnDio3Irq(NULL);
                 break;
             case SX1276_TIMEOUT_EVENT:
+                //printk("%s ,%d\r\n",__func__,__LINE__);
                 SX1276OnTimeoutIrqCallByThread();
                 break;
         }

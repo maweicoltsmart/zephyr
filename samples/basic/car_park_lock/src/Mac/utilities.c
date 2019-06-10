@@ -106,7 +106,7 @@ void BoardEnableIrq(void)
 {
     
 }
-
+static uint32_t tempvalue = 0;
 void TimerInit( TimerEvent_t *obj, void ( *callback )(struct k_timer *) )
 {
     k_timer_init(obj,callback,NULL);
@@ -115,7 +115,7 @@ void TimerInit( TimerEvent_t *obj, void ( *callback )(struct k_timer *) )
 
 void TimerStart( TimerEvent_t *obj )
 {
-
+    k_timer_start(obj,K_MSEC(tempvalue),K_MSEC(tempvalue));
 }
 
 void TimerStop( TimerEvent_t *obj )
@@ -125,7 +125,7 @@ void TimerStop( TimerEvent_t *obj )
 
 void TimerSetValue( TimerEvent_t *obj, uint32_t value )
 {
-    k_timer_start(obj,K_MSEC(1),K_MSEC(0));
+    tempvalue = value;
 }
 
 TimerTime_t TimerGetCurrentTime( void )

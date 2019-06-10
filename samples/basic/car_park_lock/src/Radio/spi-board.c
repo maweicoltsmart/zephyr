@@ -32,17 +32,16 @@
 #include <spi.h>
 
 #define SPI_DRV_NAME    "SPI_2"
-#define SPI_CS_CTRL_GPIO_DRV_NAME   "GPIO_B"
+#define SPI_CS_CTRL_GPIO_DRV_NAME   "GPIOB"
 #define SPI_CS_CTRL_GPIO_PIN    12
 
 #define SPI_SLAVE   1
-#define SLOW_FREQ   160000
-#define FAST_FREQ   160000
+#define SLOW_FREQ   1000000
+#define FAST_FREQ   1000000
 
 struct spi_config spi_cfg_fast = {
     .frequency = FAST_FREQ,
-    .operation = SPI_OP_MODE_MASTER | SPI_MODE_CPOL |
-    SPI_MODE_CPHA | SPI_WORD_SET(8) | SPI_LINES_SINGLE,
+    .operation = SPI_OP_MODE_MASTER | SPI_TRANSFER_MSB  | SPI_WORD_SET(8) | SPI_LINES_SINGLE,
     .slave = SPI_SLAVE,
     //.cs = SPI_CS,
 };
@@ -67,6 +66,7 @@ void SpiInit( void )
         printk("No aviable SPI cs pin\r\n");
         return;
     }
+    gpio_pin_configure(spi_cs.gpio_dev, spi_cs.gpio_pin, GPIO_DIR_OUT | GPIO_PUD_PULL_UP);
     gpio_pin_write(spi_cs.gpio_dev, spi_cs.gpio_pin, 1);
 
 }
@@ -81,6 +81,7 @@ uint16_t SpiInOut( uint16_t outData )
     #define BUF_SIZE 1
     u8_t buffer_tx[BUF_SIZE] = {0};
     u8_t buffer_rx[BUF_SIZE] = {0};
+    buffer_tx[0] = outData;
     const struct spi_buf tx_bufs[] = {
         {
             .buf = buffer_tx,
@@ -108,7 +109,10 @@ uint16_t SpiInOut( uint16_t outData )
     if (ret) {
         printk("SPI transceive error\r\n");
     }
-
+    /*if (memcmp(buffer_tx, buffer_rx, BUF_SIZE))
+    {
+        printk("tx rx different\r\n");
+    }*/
     return buffer_rx[0];
 }
 

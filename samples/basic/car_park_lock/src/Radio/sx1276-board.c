@@ -86,19 +86,20 @@ const struct Radio_s Radio =
 Gpio_t DbgPinTx;
 Gpio_t DbgPinRx;
 #endif
+struct device *gpio_ant_sw = NULL;
 struct device *gpiosx1276rst = NULL;
-#define SX1276_RST_PORT     "PORT_A"
+#define SX1276_RST_PORT     "GPIOA"
 #define SX1276_RST_PIN      8
 
-/* change this to enable pull-up/pull-down */
-#ifndef SW0_GPIO_FLAGS
-#ifdef SW0_GPIO_PIN_PUD
-#define SW0_GPIO_FLAGS SW0_GPIO_PIN_PUD
-#else
-#define SW0_GPIO_FLAGS 0
-#endif
-#endif
-#define PULL_UP SW0_GPIO_FLAGS
+#define SX1276_DIO_PORT       "GPIOB"
+#define SX1276_DIO_0_PORT       "GPIOB"
+#define SX1276_DIO_0_PIN        10
+#define SX1276_DIO_1_PORT       "GPIOB"
+#define SX1276_DIO_1_PIN        2
+#define SX1276_DIO_2_PORT       "GPIOB"
+#define SX1276_DIO_2_PIN        1
+#define SX1276_DIO_3_PORT       "GPIOB"
+#define SX1276_DIO_3_PIN        11
 
 void SX1276IoInit( void )
 {
@@ -109,12 +110,60 @@ void SX1276IoInit( void )
         return;
     }
 
-    gpio_pin_configure(gpiosx1276rst, SX1276_RST_PIN, GPIO_DIR_OUT);
+    gpio_pin_configure(gpiosx1276rst, SX1276_RST_PIN, GPIO_DIR_OUT | GPIO_PUD_PULL_UP);
     gpio_pin_write(gpiosx1276rst, SX1276_RST_PIN, 0);
+
+    gpio_ant_sw = device_get_binding(SX1276_DIO_2_PORT);
+    if (!gpio_ant_sw) {
+        printk("%s error\n",__func__);
+        return;
+    }
+
+    gpio_pin_configure(gpio_ant_sw, SX1276_DIO_2_PIN,
+               GPIO_DIR_OUT | GPIO_PUD_PULL_UP);
 }
 
 #define EDGE    (GPIO_INT_EDGE | GPIO_INT_ACTIVE_HIGH)
 extern struct k_msgq radio_msgq;
+
+void sx1276_dio_irq(struct device *gpiob, struct gpio_callback *cb,
+            u32_t pins)
+{
+    struct radio_event_type radio_event;
+    //printk("%s, %d\r\n",__func__,pins);
+    if(BIT(SX1276_DIO_0_PIN) & pins)
+    {
+        radio_event.event = SX1276_DIO_0_IRQ_EVENT;
+    }
+    if(BIT(SX1276_DIO_1_PIN) & pins)
+    {
+        radio_event.event = SX1276_DIO_1_IRQ_EVENT;
+    }
+    if(BIT(SX1276_DIO_2_PIN) & pins)
+    {
+        radio_event.event = SX1276_DIO_2_IRQ_EVENT;
+    }
+    if(BIT(SX1276_DIO_3_PIN) & pins)
+    {
+        radio_event.event = SX1276_DIO_3_IRQ_EVENT;
+    }
+    /*switch(pins)
+    {
+        case SX1276_DIO_0_PIN:
+        radio_event.event = SX1276_DIO_0_IRQ_EVENT;
+        break;
+        case SX1276_DIO_1_PIN:
+        radio_event.event = SX1276_DIO_1_IRQ_EVENT;
+        break;
+        case SX1276_DIO_2_PIN:
+        radio_event.event = SX1276_DIO_2_IRQ_EVENT;
+        break;
+        case SX1276_DIO_3_PIN:
+        radio_event.event = SX1276_DIO_3_IRQ_EVENT;
+        break;
+    }*/
+    k_msgq_put(&radio_msgq, &radio_event, K_NO_WAIT);
+}
 
 void sx1276_dio0_irq(struct device *gpiob, struct gpio_callback *cb,
             u32_t pins)
@@ -152,78 +201,48 @@ void sx1276_dio3_irq(struct device *gpiob, struct gpio_callback *cb,
     printk("%s at %d\n", __func__, k_cycle_get_32());
 }
 
-#define SX1276_DIO_0_PORT       "PORT_B"
-#define SX1276_DIO_0_PIN        10
-#define SX1276_DIO_1_PORT       "PORT_B"
-#define SX1276_DIO_1_PIN        2
-#define SX1276_DIO_2_PORT       "PORT_B"
-#define SX1276_DIO_2_PIN        1
-#define SX1276_DIO_3_PORT       "PORT_B"
-#define SX1276_DIO_3_PIN        11
-
-static struct gpio_callback gpio_dio_0_cb;
-static struct gpio_callback gpio_dio_1_cb;
-static struct gpio_callback gpio_dio_2_cb;
-static struct gpio_callback gpio_dio_3_cb;
+//static struct gpio_callback gpio_dio_0_cb;
+//static struct gpio_callback gpio_dio_1_cb;
+//static struct gpio_callback gpio_dio_2_cb;
+//static struct gpio_callback gpio_dio_3_cb;
+static struct gpio_callback gpio_dio_cb;
 
 void SX1276IoIrqInit( void )
 {
     struct device *gpiob;
 
-    gpiob = device_get_binding(SX1276_DIO_0_PORT);
+    gpiob = device_get_binding(SX1276_DIO_PORT);
     if (!gpiob) {
         printk("%s error\n",__func__);
         return;
     }
+    gpio_init_callback(&gpio_dio_cb, sx1276_dio_irq, BIT(SX1276_DIO_0_PIN) | BIT(SX1276_DIO_1_PIN) | BIT(SX1276_DIO_3_PIN));
+    gpio_add_callback(gpiob, &gpio_dio_cb);
 
     gpio_pin_configure(gpiob, SX1276_DIO_0_PIN,
-               GPIO_DIR_IN | GPIO_INT |  PULL_UP | EDGE);
-
-    gpio_init_callback(&gpio_dio_0_cb, sx1276_dio0_irq, BIT(SX1276_DIO_0_PIN));
-
-    gpio_add_callback(gpiob, &gpio_dio_0_cb);
+               GPIO_DIR_IN | GPIO_INT |  GPIO_PUD_PULL_UP | EDGE);
     gpio_pin_enable_callback(gpiob, SX1276_DIO_0_PIN);
 
-    gpiob = device_get_binding(SX1276_DIO_1_PORT);
-    if (!gpiob) {
-        printk("%s error\n",__func__);
-        return;
-    }
-
     gpio_pin_configure(gpiob, SX1276_DIO_1_PIN,
-               GPIO_DIR_IN | GPIO_INT |  PULL_UP | EDGE);
-
-    gpio_init_callback(&gpio_dio_1_cb, sx1276_dio1_irq, BIT(SX1276_DIO_1_PIN));
-
-    gpio_add_callback(gpiob, &gpio_dio_1_cb);
+               GPIO_DIR_IN | GPIO_INT |  GPIO_PUD_PULL_UP | EDGE);
     gpio_pin_enable_callback(gpiob, SX1276_DIO_1_PIN);
 
-    gpiob = device_get_binding(SX1276_DIO_2_PORT);
-    if (!gpiob) {
+    /*gpio_ant_sw = device_get_binding(SX1276_DIO_2_PORT);
+    if (!gpio_ant_sw) {
         printk("%s error\n",__func__);
         return;
     }
 
-    gpio_pin_configure(gpiob, SX1276_DIO_2_PIN,
-               GPIO_DIR_IN | GPIO_INT |  PULL_UP | EDGE);
+    gpio_pin_configure(gpio_ant_sw, SX1276_DIO_2_PIN,
+               GPIO_DIR_OUT | GPIO_PUD_PULL_UP);
 
     gpio_init_callback(&gpio_dio_2_cb, sx1276_dio2_irq, BIT(SX1276_DIO_2_PIN));
 
     gpio_add_callback(gpiob, &gpio_dio_2_cb);
     gpio_pin_enable_callback(gpiob, SX1276_DIO_2_PIN);
-
-    gpiob = device_get_binding(SX1276_DIO_3_PORT);
-    if (!gpiob) {
-        printk("%s error\n",__func__);
-        return;
-    }
-
+*/
     gpio_pin_configure(gpiob, SX1276_DIO_3_PIN,
-               GPIO_DIR_IN | GPIO_INT |  PULL_UP | EDGE);
-
-    gpio_init_callback(&gpio_dio_3_cb, sx1276_dio3_irq, BIT(SX1276_DIO_3_PIN));
-
-    gpio_add_callback(gpiob, &gpio_dio_3_cb);
+               GPIO_DIR_IN | GPIO_INT |  GPIO_PUD_PULL_UP | EDGE);
     gpio_pin_enable_callback(gpiob, SX1276_DIO_3_PIN);
 }
 
@@ -356,7 +375,6 @@ void SX1276SetAntSwLowPower( bool status )
     if( RadioIsActive != status )
     {
         RadioIsActive = status;
-
         if( status == false )
         {
             SX1276SetBoardTcxo( true );
@@ -377,6 +395,7 @@ void SX1276AntSwInit( void )
     //Chip_GPIO_SetPinDIROutput(LPC_GPIO_PORT, 0, 17);
     GPIO_ResetBits(SX1278_RF_SWITCH_PORT, SX1278_RF_SWITCH_PIN); /* rf switch pin low */
     #endif
+    //gpio_pin_write(gpio_ant_sw, SX1276_DIO_2_PIN, 1);
 }
 
 void SX1276AntSwDeInit( void )
@@ -386,6 +405,7 @@ void SX1276AntSwDeInit( void )
     //Chip_GPIO_SetPinOutLow(LPC_GPIO_PORT,0,17);
     GPIO_ResetBits(SX1278_RF_SWITCH_PORT, SX1278_RF_SWITCH_PIN); /* rf switch pin low */
     #endif
+    //gpio_pin_write(gpio_ant_sw, SX1276_DIO_2_PIN, 0);
 }
 
 void SX1276SetAntSw( uint8_t opMode )
@@ -394,6 +414,7 @@ void SX1276SetAntSw( uint8_t opMode )
     switch( opMode )
     {
     case RFLR_OPMODE_TRANSMITTER:
+        gpio_pin_write(gpio_ant_sw, SX1276_DIO_2_PIN, 0);
         //Chip_GPIO_SetPinOutLow(LPC_GPIO_PORT,0,17);
         //GPIO_ResetBits(SX1278_RF_SWITCH_PORT, SX1278_RF_SWITCH_PIN); /* rf switch pin low */
         break;
@@ -401,6 +422,7 @@ void SX1276SetAntSw( uint8_t opMode )
     case RFLR_OPMODE_RECEIVER_SINGLE:
     case RFLR_OPMODE_CAD:
     default:
+        gpio_pin_write(gpio_ant_sw, SX1276_DIO_2_PIN, 1);
         //Chip_GPIO_SetPinOutHigh(LPC_GPIO_PORT,0,17);
         //GPIO_SetBits(SX1278_RF_SWITCH_PORT, SX1278_RF_SWITCH_PIN); /* rf switch pin high */
         break;

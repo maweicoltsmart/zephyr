@@ -44,10 +44,8 @@ struct cfg_pkg{
 typedef struct cfg_pkg st_cfg_pkg;
 typedef struct cfg_pkg* pst_cfg_pkg;
 
-extern st_cfg_pkg stNvCfgParm;
 extern st_cfg_pkg stTmpCfgParm;
-extern uint8_t LoRaMacDevEuiInFlash[];
-extern uint8_t factorystring[];
+extern const uint8_t LoRaMacDevEuiInFlash[];
 
 void cfg_parm_factory_reset(void);
 void cfg_parm_restore(void);

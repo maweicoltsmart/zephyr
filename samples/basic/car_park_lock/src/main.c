@@ -56,12 +56,12 @@ void blink1(void)
 	blink(PORT0, 100, LED0, 0);
 }
 
-void blink2(void)
+/*void blink2(void)
 {
 	blink(PORT1, 1000, LED1, 1);
 }
-
+*/
 K_THREAD_DEFINE(blink1_id, STACKSIZE, blink1, NULL, NULL, NULL,
 		PRIORITY, 0, K_NO_WAIT);
-K_THREAD_DEFINE(blink2_id, STACKSIZE, blink2, NULL, NULL, NULL,
-		PRIORITY, 0, K_NO_WAIT);
+/*K_THREAD_DEFINE(blink2_id, STACKSIZE, blink2, NULL, NULL, NULL,
+		PRIORITY, 0, K_NO_WAIT);*/

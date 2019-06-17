@@ -7,11 +7,11 @@
 #include "cfg_parm.h"
 #include <stdio.h>
 #include "LoRaMac.h"
+#include "nvs.h"
 
-st_cfg_pkg stNvCfgParm;
 st_cfg_pkg stTmpCfgParm;
-uint8_t LoRaMacDevEuiInFlash[8] = {0x01,0x00,0x00,0x00,0x14,0x03,0x19,0x20};
-uint8_t factorystring[250] = {0x00};
+const uint8_t LoRaMacDevEuiInFlash[8] = {0x01,0x00,0x00,0x00,0x14,0x03,0x19,0x20};
+
 void cfg_parm_factory_reset(void)
 {
     memset(&stTmpCfgParm,0,5);
@@ -53,80 +53,15 @@ void cfg_parm_factory_reset(void)
     stTmpCfgParm.ChannelMask[2] = 0x00;
     stTmpCfgParm.TxPower = 20;
 
-    stNvCfgParm.inNetMode = stTmpCfgParm.inNetMode;
-    stNvCfgParm.netState = stTmpCfgParm.netState;
-    stNvCfgParm.UpLinkCounter = stTmpCfgParm.UpLinkCounter;
-    stNvCfgParm.DownLinkCounter = stTmpCfgParm.DownLinkCounter;
-    for(uint8_t i = 0;i < 8;i ++)
-    {
-        stTmpCfgParm.LoRaMacDevEui[i] = LoRaMacDevEuiInFlash[i];
-        stNvCfgParm.LoRaMacDevEui[i] = LoRaMacDevEuiInFlash[i];
-        stNvCfgParm.LoRaMacAppEui[i] = stTmpCfgParm.LoRaMacAppEui[i];
-    }
-    for(uint8_t i = 0;i < 16;i ++)
-    {
-        stNvCfgParm.LoRaMacAppKey[i] = stTmpCfgParm.LoRaMacAppKey[i];
-    }
-    stNvCfgParm.ChannelMask[0] = stTmpCfgParm.ChannelMask[0];
-    stNvCfgParm.ChannelMask[1] = stTmpCfgParm.ChannelMask[1];
-    stNvCfgParm.ChannelMask[2] = stTmpCfgParm.ChannelMask[2];
-    stNvCfgParm.TxPower = stTmpCfgParm.TxPower;
-    //printf("%s : %02X %02X %02X %02X %02X \r\n",__func__,stTmpCfgParm.addr_h,stTmpCfgParm.addr_l,stTmpCfgParm.speed.speed,stTmpCfgParm.channel.channel,stTmpCfgParm.option.option);
-    //printf("%s : %02X %02X %02X %02X %02X \r\n",__func__,stNvCfgParm.addr_h,stNvCfgParm.addr_l,stNvCfgParm.speed.speed,stNvCfgParm.channel.channel,stNvCfgParm.option.option);
+    cfg_parm_restore();
 }
 
 void cfg_parm_restore(void)
 {
-    stNvCfgParm.inNetMode = stTmpCfgParm.inNetMode;
-    stNvCfgParm.netState = stTmpCfgParm.netState;
-    
-    for(uint8_t i = 0;i < 8;i ++)
-      stNvCfgParm.LoRaMacAppEui[i] = stTmpCfgParm.LoRaMacAppEui[i];
-    for(uint8_t i = 0;i < 16;i ++)
-    {
-        stNvCfgParm.LoRaMacAppKey[i] = stTmpCfgParm.LoRaMacAppKey[i];
-        stNvCfgParm.LoRaMacNwkSKey[i] = stTmpCfgParm.LoRaMacNwkSKey[i];
-        stNvCfgParm.LoRaMacAppSKey[i] = stTmpCfgParm.LoRaMacAppSKey[i];
-    }
-      
-    stNvCfgParm.LoRaMacNetID = stTmpCfgParm.LoRaMacNetID;
-    stNvCfgParm.LoRaMacDevAddr = stTmpCfgParm.LoRaMacDevAddr;
-    stNvCfgParm.UpLinkCounter = stTmpCfgParm.UpLinkCounter;
-    stNvCfgParm.DownLinkCounter = stTmpCfgParm.DownLinkCounter;
-    //printf("%s : %02X %02X %02X %02X %02X \r\n",__func__,stTmpCfgParm.addr_h,stTmpCfgParm.addr_l,stTmpCfgParm.speed.speed,stTmpCfgParm.channel.channel,stTmpCfgParm.option.option);
-    //printf("%s : %02X %02X %02X %02X %02X \r\n",__func__,stNvCfgParm.addr_h,stNvCfgParm.addr_l,stNvCfgParm.speed.speed,stNvCfgParm.channel.channel,stNvCfgParm.option.option);
-    stNvCfgParm.ChannelMask[0] = stTmpCfgParm.ChannelMask[0];
-    stNvCfgParm.ChannelMask[1] = stTmpCfgParm.ChannelMask[1];
-    stNvCfgParm.ChannelMask[2] = stTmpCfgParm.ChannelMask[2];
-    stNvCfgParm.TxPower = stTmpCfgParm.TxPower;
+    car_park_lock_nvs_restore((uint8_t*)&stTmpCfgParm,sizeof(stTmpCfgParm));
 }
 
 void cfg_parm_dump_to_ram(void)
 {
-    stTmpCfgParm.inNetMode = stNvCfgParm.inNetMode;
-    stTmpCfgParm.netState = stNvCfgParm.netState;
-    
-    for(uint8_t i = 0;i < 8;i ++)
-    {
-        stTmpCfgParm.LoRaMacDevEui[i] = stNvCfgParm.LoRaMacDevEui[i];
-        stTmpCfgParm.LoRaMacAppEui[i] = stNvCfgParm.LoRaMacAppEui[i];
-    }
-    
-    for(uint8_t i = 0;i < 16;i ++)
-    {
-        stTmpCfgParm.LoRaMacAppKey[i] = stNvCfgParm.LoRaMacAppKey[i];
-        stTmpCfgParm.LoRaMacNwkSKey[i] = stNvCfgParm.LoRaMacNwkSKey[i];
-        stTmpCfgParm.LoRaMacAppSKey[i] = stNvCfgParm.LoRaMacAppSKey[i];
-    }
-      
-    stTmpCfgParm.LoRaMacNetID = stNvCfgParm.LoRaMacNetID;
-    stTmpCfgParm.LoRaMacDevAddr = stNvCfgParm.LoRaMacDevAddr;
-    stTmpCfgParm.UpLinkCounter = stNvCfgParm.UpLinkCounter;
-    stTmpCfgParm.DownLinkCounter = stNvCfgParm.DownLinkCounter;
-    //printf("%s : %02X %02X %02X %02X %02X \r\n",__func__,stTmpCfgParm.addr_h,stTmpCfgParm.addr_l,stTmpCfgParm.speed.speed,stTmpCfgParm.channel.channel,stTmpCfgParm.option.option);
-    //printf("%s : %02X %02X %02X %02X %02X \r\n",__func__,stNvCfgParm.addr_h,stNvCfgParm.addr_l,stNvCfgParm.speed.speed,stNvCfgParm.channel.channel,stNvCfgParm.option.option);
-    stTmpCfgParm.ChannelMask[0] = stNvCfgParm.ChannelMask[0];
-    stTmpCfgParm.ChannelMask[1] = stNvCfgParm.ChannelMask[1];
-    stTmpCfgParm.ChannelMask[2] = stNvCfgParm.ChannelMask[2];
-    stTmpCfgParm.TxPower = stNvCfgParm.TxPower;
+    car_park_lock_nvs_get((uint8_t*)&stTmpCfgParm,sizeof(stTmpCfgParm));
 }

@@ -506,7 +506,12 @@ LoRaMacStatus_t LoRaMacInitialization( void )
     //modem_init ();
     //PWR_UltraLowPowerCmd(DISABLE); // TIM2 ±÷”ª·”–—”≥Ÿ
     BoardDisableIrq();
-    cfg_parm_factory_reset();
+    cfg_parm_dump_to_ram();
+    if(stTmpCfgParm.netState < LORAMAC_JOINED)
+    {
+        cfg_parm_factory_reset();
+    }
+    
     SpiInit();
     SX1276IoInit();
     //TIM4_Config();

@@ -10,6 +10,7 @@
 #include <misc/util.h>
 #include <misc/printk.h>
 #include "motor.h"
+#include "cfg_parm.h"
 
 /* size of stack area used by each thread */
 #define STACKSIZE 1024
@@ -47,6 +48,8 @@ void rejoin_button_pressed(struct device *gpiob, struct gpio_callback *cb,
 	u32_t val = 0U;
 	gpio_pin_read(gpiob, PIN_REJOIN_KEY, &val);
 	printk("Button pressed at %d,%d\n", k_cycle_get_32(),val);
+	cfg_parm_factory_reset();
+	cfg_parm_dump_to_ram();
 }
 void calibrate_button_pressed(struct device *gpiob, struct gpio_callback *cb,
 		    u32_t pins)

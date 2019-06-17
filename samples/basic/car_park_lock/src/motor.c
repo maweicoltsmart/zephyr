@@ -10,6 +10,7 @@
 #include <ring_buffer.h>
 #include <atomic.h>
 #include <uart.h>
+#include "cfg_parm.h"
 
 /* size of stack area used by each thread */
 #define STACKSIZE 300
@@ -71,39 +72,39 @@ void motor_process(void)
         switch(motor_event.event)
         {
             case MOTOR_CMD_FORWARD_EVENT:
-            	gpio_pin_write(gpio_dev_pwm, PIN_MOTOR_PWM, 0);
-                gpio_pin_write(gpio_dev_brak, PIN_MOTOR_BRAK, 0);
-                gpio_pin_write(gpio_dev_dir, PIN_MOTOR_DIR, 1);
+            	gpio_pin_write(gpio_dev_pwm, PIN_MOTOR_PWM, 0); // IN2
+                gpio_pin_write(gpio_dev_brak, PIN_MOTOR_BRAK, 1); // EN
+                gpio_pin_write(gpio_dev_dir, PIN_MOTOR_DIR, 1); // IN1
                 printk("motor go forward\r\n");
                 break;
             case MOTOR_CMD_BACKWARD_EVENT:
-                gpio_pin_write(gpio_dev_pwm, PIN_MOTOR_PWM, 0);
-                gpio_pin_write(gpio_dev_brak, PIN_MOTOR_BRAK, 0);
+                gpio_pin_write(gpio_dev_pwm, PIN_MOTOR_PWM, 1);
+                gpio_pin_write(gpio_dev_brak, PIN_MOTOR_BRAK, 1);
                 gpio_pin_write(gpio_dev_dir, PIN_MOTOR_DIR, 0);
                 printk("motor go backward\r\n");
                 break;
             case MOTOR_KEY1_EVENT:
-                gpio_pin_write(gpio_dev_pwm, PIN_MOTOR_PWM, 0);
-                gpio_pin_write(gpio_dev_brak, PIN_MOTOR_BRAK, 0);
-                gpio_pin_write(gpio_dev_dir, PIN_MOTOR_DIR, 0);
+                gpio_pin_write(gpio_dev_pwm, PIN_MOTOR_PWM, 1);
+                gpio_pin_write(gpio_dev_brak, PIN_MOTOR_BRAK, 1);
+                gpio_pin_write(gpio_dev_dir, PIN_MOTOR_DIR, 1);
                 printk("motor go stop\r\n");
                 break;
             case MOTOR_KEY2_EVENT:
-                gpio_pin_write(gpio_dev_pwm, PIN_MOTOR_PWM, 0);
-                gpio_pin_write(gpio_dev_brak, PIN_MOTOR_BRAK, 0);
-                gpio_pin_write(gpio_dev_dir, PIN_MOTOR_DIR, 0);
+                gpio_pin_write(gpio_dev_pwm, PIN_MOTOR_PWM, 1);
+                gpio_pin_write(gpio_dev_brak, PIN_MOTOR_BRAK, 1);
+                gpio_pin_write(gpio_dev_dir, PIN_MOTOR_DIR, 1);
                 printk("motor go stop\r\n");
                 break;
             case MOTOR_CMD_BRAK_EVENT:
-            	gpio_pin_write(gpio_dev_pwm, PIN_MOTOR_PWM, 0);
-                gpio_pin_write(gpio_dev_brak, PIN_MOTOR_BRAK, 0);
-                gpio_pin_write(gpio_dev_dir, PIN_MOTOR_DIR, 0);
+            	gpio_pin_write(gpio_dev_pwm, PIN_MOTOR_PWM, 1);
+                gpio_pin_write(gpio_dev_brak, PIN_MOTOR_BRAK, 1);
+                gpio_pin_write(gpio_dev_dir, PIN_MOTOR_DIR, 1);
                 printk("motor go stop\r\n");
             	break;
             default:
-            	gpio_pin_write(gpio_dev_pwm, PIN_MOTOR_PWM, 0);
-                gpio_pin_write(gpio_dev_brak, PIN_MOTOR_BRAK, 0);
-                gpio_pin_write(gpio_dev_dir, PIN_MOTOR_DIR, 0);
+            	gpio_pin_write(gpio_dev_pwm, PIN_MOTOR_PWM, 1);
+                gpio_pin_write(gpio_dev_brak, PIN_MOTOR_BRAK, 1);
+                gpio_pin_write(gpio_dev_dir, PIN_MOTOR_DIR, 1);
                 printk("motor go stop\r\n");
             	break;
         }
@@ -148,6 +149,15 @@ void motor_adc_process(void)
 	};
 	s16_t sample_value;
 
+    struct device *gpiob;
+    gpiob = device_get_binding("GPIOF");
+    if (!gpiob) {
+        printk("error\n");
+        return;
+    }
+
+    gpio_pin_configure(gpiob, 7, GPIO_DIR_IN | 7);
+
 	struct device *adc_dev = init_adc();
 
 	if (!adc_dev) {
@@ -164,6 +174,17 @@ void motor_adc_process(void)
 			motor_event.event = MOTOR_CMD_BRAK_EVENT;
     		k_msgq_put(&motor_msgq, &motor_event, K_NO_WAIT);
 		}
+
+        
+        u32_t val = 0U;
+        gpio_pin_read(gpiob, 7, &val);
+        if(val == 0)
+        {
+            cfg_parm_factory_reset();
+            printk("Rejoin again\r\n");
+        }
+        //printk("get rejoin key at %d,%d\n", k_cycle_get_32(),val);
+
 		k_sleep(1000);
 	}
 }

@@ -52,6 +52,7 @@ void cfg_parm_factory_reset(void)
     stTmpCfgParm.ChannelMask[1] = 0x00;
     stTmpCfgParm.ChannelMask[2] = 0x00;
     stTmpCfgParm.TxPower = 20;
+    stTmpCfgParm.destencelevel = 500;// mm
 
     cfg_parm_restore();
 }

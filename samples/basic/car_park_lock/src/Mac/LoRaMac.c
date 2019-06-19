@@ -43,7 +43,7 @@
 #include "radio.h"
 #include "sx1276-board.h"
 #include "spi-board.h"
-
+#include "motor.h"
 /* size of stack area used by each thread */
 #define STACKSIZE 512
 
@@ -223,9 +223,9 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
                 stTmpCfgParm.LoRaMacDevAddr |= ( ( uint32_t )LoRaMacRxPayload[8] << 8 );
                 stTmpCfgParm.LoRaMacDevAddr |= ( ( uint32_t )LoRaMacRxPayload[9] << 16 );
                 stTmpCfgParm.LoRaMacDevAddr |= ( ( uint32_t )LoRaMacRxPayload[10] << 24 );
-                stTmpCfgParm.ChannelMask[0] = stTmpCfgParm.LoRaMacNetID & 0x000000ff;
+                /*stTmpCfgParm.ChannelMask[0] = stTmpCfgParm.LoRaMacNetID & 0x000000ff;
                 stTmpCfgParm.ChannelMask[1] = (stTmpCfgParm.LoRaMacNetID & 0x0000ff00) >> 8;
-                stTmpCfgParm.ChannelMask[2] = (stTmpCfgParm.LoRaMacNetID & 0x00ff0000) >> 16;
+                stTmpCfgParm.ChannelMask[2] = (stTmpCfgParm.LoRaMacNetID & 0x00ff0000) >> 16;*/
                 stTmpCfgParm.netState = LORAMAC_JOINED;
                 cfg_parm_restore();
                 printk("%s, %d\r\n",__func__,__LINE__);
@@ -307,6 +307,37 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
                                                        DOWN_LINK,
                                                        downLinkCounter,
                                                        LoRaMacRxPayload );
+                        if(LoRaMacRxPayload[0] == 0) // check
+                        {
+                            uint8_t temp[5];
+                            temp[0] = unLockStatus.value;
+                            temp[1] = destensecopy[0] & 0x00ff;
+                            temp[2] = (destensecopy[0] >> 8) & 0x00ff;
+                            temp[3] = destensecopy[1] & 0x00ff;
+                            temp[4] = (destensecopy[1] >> 8) & 0x00ff;
+                            SendFrameOnChannel( 0,temp,5,false,1);
+                            return;
+                        }
+                        else if(LoRaMacRxPayload[0] == 1) // set destence param
+                        {
+                            stTmpCfgParm.destencelevel = LoRaMacRxPayload[1] | LoRaMacRxPayload[2] << 8;
+                        }
+                        else if(LoRaMacRxPayload[0] == 2) // motor cmd
+                        {
+                            if(LoRaMacRxPayload[1] == 0)
+                            {
+                                struct motor_event_type motor_event;
+                                motor_event.event = MOTOR_CMD_DOWN_EVENT;
+                                k_msgq_put(&motor_msgq, &motor_event, K_NO_WAIT);
+                            }
+                            else if(LoRaMacRxPayload[1] == 1)
+                            {
+                                struct motor_event_type motor_event;
+                                motor_event.event = MOTOR_CMD_UP_EVENT;
+                                k_msgq_put(&motor_msgq, &motor_event, K_NO_WAIT);
+                            }
+                        }
+
                         #if 0
                         //onEvent(EV_RXCOMPLETE);
                         if(RxfCtrl.Bits.Ack)
@@ -481,7 +512,7 @@ LoRaMacStatus_t SendJoinRequest( void )
     pktHeaderLen += 8;
 
     LoRaMacDevNonce = rand1();//Radio.Random( );
-    LoRaMacDevNonceCopy = (LoRaMacDevNonce << 8) | (LoRaMacDevNonce >> 8);
+    LoRaMacDevNonceCopy = LoRaMacDevNonce;//(LoRaMacDevNonce << 8) | (LoRaMacDevNonce >> 8);
     LoRaMacBuffer[pktHeaderLen++] = LoRaMacDevNonce & 0xFF;
     LoRaMacBuffer[pktHeaderLen++] = ( LoRaMacDevNonce >> 8 ) & 0xFF;
 
@@ -597,7 +628,7 @@ void LoRaRadioEventCheck( void )
     }
 }
 
-K_THREAD_DEFINE(lora_mac_id, STACKSIZE, LoRaMacStateCheck, NULL, NULL, NULL,
+K_THREAD_DEFINE(lora_mac_id, 512, LoRaMacStateCheck, NULL, NULL, NULL,
         PRIORITY, 0, K_NO_WAIT);
-K_THREAD_DEFINE(lora_radio_id, STACKSIZE, LoRaRadioEventCheck, NULL, NULL, NULL,
+K_THREAD_DEFINE(lora_radio_id, 512, LoRaRadioEventCheck, NULL, NULL, NULL,
         PRIORITY, 0, K_NO_WAIT);

@@ -21,8 +21,8 @@
 /* scheduling priority used by each thread */
 #define PRIORITY 7
 
-static uint8_t device_unique_id[8] = {0x20,0x19,0x05,0x06,0x00,0x00,0x00,0x01};
-extern char localip[];
+//static uint8_t device_unique_id[8] = {0x20,0x19,0x05,0x06,0x00,0x00,0x00,0x01};
+//extern char localip[];
 
 //K_SEM_DEFINE(car_park_lock_nvs_restore, 0, 1);
 

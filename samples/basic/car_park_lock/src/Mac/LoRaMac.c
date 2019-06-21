@@ -159,11 +159,13 @@ static void RadioSetRx(void)
 
 static void LoRaMacOnRadioTxDone( void )
 {
-    printk("%s ,%d\r\n",__func__,__LINE__);
-    
+    printk("%s\r\n",__func__);
     RadioSetRx();
     Radio.Rx(0);
-    ////RTC_WakeUpCmd(ENABLE);
+    if(stTmpCfgParm.netState >= LORAMAC_JOINED)
+    {
+        stTmpCfgParm.netState = LORAMAC_JOINED_IDLE;
+    }
 }
 
 static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr )
@@ -191,7 +193,6 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
     Radio.Sleep( );
 
     macHdr.Value = payload[pktHeaderLen++];
-
     switch( macHdr.Bits.MType )
     {
         case FRAME_TYPE_JOIN_ACCEPT:
@@ -200,17 +201,14 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
                 return;
             }
             LoRaMacJoinDecrypt( payload + 1, size - 1, stTmpCfgParm.LoRaMacAppKey, LoRaMacRxPayload + 1 );
-
             LoRaMacRxPayload[0] = macHdr.Value;
-
             LoRaMacJoinComputeMic( LoRaMacRxPayload, size - LORAMAC_MFR_LEN, stTmpCfgParm.LoRaMacAppKey, &mic );
             mic += LoRaMacDevNonce;
-
+            printk("%s, %d\r\n",__func__,__LINE__);
             micRx |= ( uint32_t )LoRaMacRxPayload[size - LORAMAC_MFR_LEN];
             micRx |= ( ( uint32_t )LoRaMacRxPayload[size - LORAMAC_MFR_LEN + 1] << 8 );
             micRx |= ( ( uint32_t )LoRaMacRxPayload[size - LORAMAC_MFR_LEN + 2] << 16 );
             micRx |= ( ( uint32_t )LoRaMacRxPayload[size - LORAMAC_MFR_LEN + 3] << 24 );
-
             if( micRx == mic )
             {
                 LoRaMacJoinComputeSKeys( stTmpCfgParm.LoRaMacAppKey, LoRaMacRxPayload + 1, LoRaMacDevNonceCopy, stTmpCfgParm.LoRaMacNwkSKey, stTmpCfgParm.LoRaMacAppSKey );
@@ -238,6 +236,8 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
             {
                 if( stTmpCfgParm.netState < LORAMAC_JOINED )
                 {
+                    RadioSetRx();
+                    Radio.Rx(0);
                     return;
                 }
                 // Check if the received payload size is valid
@@ -249,6 +249,8 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
 
                 if( address != stTmpCfgParm.LoRaMacDevAddr )
                 {
+                    RadioSetRx();
+                    Radio.Rx(0);
                     return;
                 }
                 else
@@ -309,13 +311,11 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
                                                        LoRaMacRxPayload );
                         if(LoRaMacRxPayload[0] == 0) // check
                         {
-                            uint8_t temp[5];
-                            temp[0] = unLockStatus.value;
-                            temp[1] = destensecopy[0] & 0x00ff;
-                            temp[2] = (destensecopy[0] >> 8) & 0x00ff;
-                            temp[3] = destensecopy[1] & 0x00ff;
-                            temp[4] = (destensecopy[1] >> 8) & 0x00ff;
-                            SendFrameOnChannel( 0,temp,5,false,1);
+                            struct msg_up_event_type msg_up_event;
+                            msg_up_event.event = MSG_UP_PARK_STATUS_REQ_EVENT;
+                            k_msgq_put(&msgup_msgq, &msg_up_event, K_NO_WAIT);
+                            RadioSetRx();
+                            Radio.Rx(0);
                             return;
                         }
                         else if(LoRaMacRxPayload[0] == 1) // set destence param
@@ -394,6 +394,10 @@ static void LoRaMacOnRadioTxTimeout( void )
 {
     RadioSetRx();
     Radio.Rx(0);
+    if(stTmpCfgParm.netState >= LORAMAC_JOINED)
+    {
+        stTmpCfgParm.netState = LORAMAC_JOINED_IDLE;
+    }
 }
 
 static void LoRaMacOnRadioRxError( void )
@@ -568,21 +572,48 @@ LoRaMacStatus_t LoRaMacInitialization( void )
     BoardEnableIrq();
     return LORAMAC_STATUS_OK;
 }
+K_MSGQ_DEFINE(msgup_msgq, sizeof(struct motor_event_type), 20, 4);
 
 void LoRaMacStateCheck( void )
 {    
+    struct msg_up_event_type msg_up_event;
+    int ret;
+
     LoRaMacInitialization();
     while(true)
     {
-        if(stTmpCfgParm.netState == LORAMAC_IDLE)
+        switch(stTmpCfgParm.netState)
         {
-            SendJoinRequest();
-            k_sleep(K_MSEC(8000));
-            
-        }
-        else
-        {
-            k_sleep(K_MSEC(5000));
+            case LORAMAC_IDLE:
+                SendJoinRequest();
+                printk("Joinning\r\n");
+                k_sleep(K_MSEC(5000));
+                break;
+            case LORAMAC_JOINING:
+
+                break;
+            case LORAMAC_JOINED:
+                printk("joined\r\n");
+                stTmpCfgParm.netState = LORAMAC_JOINED_IDLE;
+            case LORAMAC_JOINED_IDLE:
+                ret = k_msgq_get(&msgup_msgq, &msg_up_event, K_FOREVER);
+                while(Radio.GetStatus() == RF_TX_RUNNING)
+                {
+                    k_sleep(K_MSEC(100));
+                }
+
+                uint8_t temp[5];
+                temp[0] = unLockStatus.value;
+                temp[1] = destensecopy[0] & 0x00ff;
+                temp[2] = (destensecopy[0] >> 8) & 0x00ff;
+                temp[3] = destensecopy[1] & 0x00ff;
+                temp[4] = (destensecopy[1] >> 8) & 0x00ff;
+                SendFrameOnChannel( 0,temp,5,false,1);
+                break;
+            case LORAMAC_TX_ING:
+                break;
+            default:
+                break;
         }
     }
 }

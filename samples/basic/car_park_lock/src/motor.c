@@ -178,13 +178,10 @@ void motor_process(void)
                         unLockStatus.motor = 1;
                         if(stTmpCfgParm.netState >= LORAMAC_JOINED)
                         {
-                            uint8_t temp[5];
-                            temp[0] = (uint8_t)unLockStatus.value;
-                            temp[1] = destensecopy[0] & 0x00ff;
-                            temp[2] = (destensecopy[0] >> 8) & 0x00ff;
-                            temp[3] = destensecopy[1] & 0x00ff;
-                            temp[4] = (destensecopy[1] >> 8) & 0x00ff;
-                            SendFrameOnChannel( 0,temp,5,false,1);
+                            struct msg_up_event_type msg_up_event;
+                            msg_up_event.event = MSG_UP_LOCK_STATUS_CHANGE_EVENT;
+                            k_msgq_put(&msgup_msgq, &msg_up_event, K_NO_WAIT);
+                            printk("send to server\r\n");
                         }
                         printk("up key detect\r\n");
                     }
@@ -244,13 +241,10 @@ void motor_process(void)
                         unLockStatus.motor = 0;
                         if(stTmpCfgParm.netState >= LORAMAC_JOINED)
                         {
-                            uint8_t temp[5];
-                            temp[0] = (uint8_t)unLockStatus.value;
-                            temp[1] = destensecopy[0] & 0x00ff;
-                            temp[2] = (destensecopy[0] >> 8) & 0x00ff;
-                            temp[3] = destensecopy[1] & 0x00ff;
-                            temp[4] = (destensecopy[1] >> 8) & 0x00ff;
-                            SendFrameOnChannel( 0,temp,5,false,1);
+                            struct msg_up_event_type msg_up_event;
+                            msg_up_event.event = MSG_UP_LOCK_STATUS_CHANGE_EVENT;
+                            k_msgq_put(&msgup_msgq, &msg_up_event, K_NO_WAIT);
+                            printk("send to server\r\n");
                         }
                         printk("down key detect\r\n");
                     }
@@ -376,6 +370,9 @@ void motor_adc_process(void)
         if(val == 0)
         {
             cfg_parm_factory_reset();
+            struct msg_up_event_type msg_up_event;
+            msg_up_event.event = MSG_UP_PARK_STATUS_CHANGE_EVENT;
+            k_msgq_put(&msgup_msgq, &msg_up_event, K_NO_WAIT);
             printk("Rejoin again\r\n");
         }
         //printk("get rejoin key at %d,%d\n", k_cycle_get_32(),val);
@@ -556,6 +553,10 @@ void motor_cmd_process(void)
 
     static uint8_t state_next = 0;
     static uint16_t destense = 0;
+
+    bool sensor1lastvalue = !unLockStatus.sensor1;
+    bool sensor2lastvalue = !unLockStatus.sensor2;
+
 	while(1)
 	{
 		k_sem_take(&rx_sem,K_FOREVER);
@@ -612,11 +613,26 @@ void motor_cmd_process(void)
                         if(destense < stTmpCfgParm.destencelevel)
                         {
                             unLockStatus.sensor1 = 1;
-                            //printk("car detect destense = %d\r\n",destense);
+                            if(sensor1lastvalue != unLockStatus.sensor1)
+                            {
+                                sensor1lastvalue = unLockStatus.sensor1;
+                                struct msg_up_event_type msg_up_event;
+                                msg_up_event.event = MSG_UP_PARK_STATUS_CHANGE_EVENT;
+                                k_msgq_put(&msgup_msgq, &msg_up_event, K_NO_WAIT);
+                                printk("car detect destense = %d\r\n",destense);
+                            }
                         }
                         else
                         {
                             unLockStatus.sensor1 = 0;
+                            if(sensor1lastvalue != unLockStatus.sensor1)
+                            {
+                                sensor1lastvalue = unLockStatus.sensor1;
+                                struct msg_up_event_type msg_up_event;
+                                msg_up_event.event = MSG_UP_PARK_STATUS_CHANGE_EVENT;
+                                k_msgq_put(&msgup_msgq, &msg_up_event, K_NO_WAIT);
+                                printk("car not detect destense = %d\r\n",destense);
+                            }
                         }
                     }
                     state_next = 0;
@@ -626,9 +642,9 @@ void motor_cmd_process(void)
 	}
 }
 
-K_THREAD_DEFINE(motor_process_id, 580, motor_process, NULL, NULL, NULL,
+K_THREAD_DEFINE(motor_process_id, 512, motor_process, NULL, NULL, NULL,
 		8, 0, K_NO_WAIT);
-K_THREAD_DEFINE(motor_adc_id, 600, motor_adc_process, NULL, NULL, NULL,
+K_THREAD_DEFINE(motor_adc_id, 512, motor_adc_process, NULL, NULL, NULL,
 		7, 0, K_NO_WAIT);
 K_THREAD_DEFINE(motor_cmd_id, 300, motor_cmd_process, NULL, NULL, NULL,
 		7, 0, K_NO_WAIT);

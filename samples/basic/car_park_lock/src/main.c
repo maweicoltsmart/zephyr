@@ -24,36 +24,54 @@
 #ifndef LED1_GPIO_CONTROLLER
 #define LED1_GPIO_CONTROLLER 	LED1_GPIO_PORT
 #endif
+#ifndef LED2_GPIO_CONTROLLER
+#define LED2_GPIO_CONTROLLER 	LED2_GPIO_PORT
+#endif
 
 #define PORT0	 LED0_GPIO_CONTROLLER
 #define PORT1	 LED1_GPIO_CONTROLLER
+#define PORT2	 LED2_GPIO_CONTROLLER
 
 
 /* Change this if you have an LED connected to a custom pin */
 #define LED0    LED0_GPIO_PIN
 #define LED1    LED1_GPIO_PIN
+#define LED2    LED2_GPIO_PIN
 
-void blink(const char *port, u32_t sleep_ms, u32_t led, u32_t id)
+void blink(void)
 {
-	int cnt = 0;
-	struct device *gpio_dev;
+	struct device *gpio_dev0,*gpio_dev1,*gpio_dev2;
 
-	gpio_dev = device_get_binding(port);
-	__ASSERT_NO_MSG(gpio_dev != NULL);
+	gpio_dev0 = device_get_binding(PORT0);
+	__ASSERT_NO_MSG(gpio_dev0 != NULL);
 
-	gpio_pin_configure(gpio_dev, led, GPIO_DIR_OUT);
+	gpio_pin_configure(gpio_dev0, LED0, GPIO_DIR_OUT);
 
-	while (1) {
-		gpio_pin_write(gpio_dev, led, cnt % 2);
+	gpio_dev1 = device_get_binding(PORT1);
+	__ASSERT_NO_MSG(gpio_dev1 != NULL);
 
-		k_sleep(sleep_ms);
-		cnt++;
+	gpio_pin_configure(gpio_dev1, LED1, GPIO_DIR_OUT);
+
+	gpio_dev2 = device_get_binding(PORT2);
+	__ASSERT_NO_MSG(gpio_dev2 != NULL);
+
+	gpio_pin_configure(gpio_dev2, LED2, GPIO_DIR_OUT);
+
+	while(1)
+	{
+		gpio_pin_write(gpio_dev0, LED0, 1);
+		gpio_pin_write(gpio_dev1, LED1, 0);
+		gpio_pin_write(gpio_dev2, LED2, 0);
+		k_sleep(1000);
+		gpio_pin_write(gpio_dev0, LED0, 0);
+		gpio_pin_write(gpio_dev1, LED1, 1);
+		gpio_pin_write(gpio_dev2, LED2, 0);
+		k_sleep(1000);
+		gpio_pin_write(gpio_dev0, LED0, 0);
+		gpio_pin_write(gpio_dev1, LED1, 0);
+		gpio_pin_write(gpio_dev2, LED2, 1);
+		k_sleep(1000);
 	}
-}
-
-void blink1(void)
-{
-	blink(PORT0, 100, LED0, 0);
 }
 
 /*void blink2(void)
@@ -61,7 +79,7 @@ void blink1(void)
 	blink(PORT1, 1000, LED1, 1);
 }
 */
-K_THREAD_DEFINE(blink1_id, STACKSIZE, blink1, NULL, NULL, NULL,
+K_THREAD_DEFINE(blink_id, STACKSIZE, blink, NULL, NULL, NULL,
 		PRIORITY, 0, K_NO_WAIT);
 /*K_THREAD_DEFINE(blink2_id, STACKSIZE, blink2, NULL, NULL, NULL,
 		PRIORITY, 0, K_NO_WAIT);*/

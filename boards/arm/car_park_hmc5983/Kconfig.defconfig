@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-if BOARD_CAR_PARK_LOCK_HMC5983
+if BOARD_CAR_PARK_HMC5983
 
 config BOARD
 	default "car_park_hmc5983"
@@ -40,4 +40,4 @@ config I2C_2
 
 endif
 
-endif # BOARD_CAR_PARK_LOCK_HMC5983
+endif # BOARD_CAR_PARK_HMC5983

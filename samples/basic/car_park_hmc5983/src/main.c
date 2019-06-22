@@ -55,7 +55,7 @@ void blink(const char *port, u32_t sleep_ms, u32_t led, u32_t id)
 	while (1) {
 		gpio_pin_write(gpio_dev, led, cnt % 2);
 
-		struct printk_data_t tx_data = { .led = id, .cnt = cnt };
+		/*struct printk_data_t tx_data = { .led = id, .cnt = cnt };
 
 		size_t size = sizeof(struct printk_data_t);
 		char *mem_ptr = k_malloc(size);
@@ -63,7 +63,7 @@ void blink(const char *port, u32_t sleep_ms, u32_t led, u32_t id)
 
 		memcpy(mem_ptr, &tx_data, size);
 
-		k_fifo_put(&printk_fifo, mem_ptr);
+		k_fifo_put(&printk_fifo, mem_ptr);*/
 
 		k_sleep(sleep_ms);
 		cnt++;
@@ -80,14 +80,14 @@ void blink2(void)
 	blink(PORT1, 1000, LED1, 1);
 }
 
-void uart_out(void)
+/*void uart_out(void)
 {
 	while (1) {
 		struct printk_data_t *rx_data = k_fifo_get(&printk_fifo, K_FOREVER);
 		printk("Toggle USR%d LED: Counter = %d\n", rx_data->led, rx_data->cnt);
 		k_free(rx_data);
 	}
-}
+}*/
 
 void hmc5983(void)
 {
@@ -120,7 +120,7 @@ K_THREAD_DEFINE(blink1_id, STACKSIZE, blink1, NULL, NULL, NULL,
 		PRIORITY, 0, K_NO_WAIT);
 K_THREAD_DEFINE(blink2_id, STACKSIZE, blink2, NULL, NULL, NULL,
 		PRIORITY, 0, K_NO_WAIT);
-K_THREAD_DEFINE(uart_out_id, STACKSIZE, uart_out, NULL, NULL, NULL,
-		PRIORITY, 0, K_NO_WAIT);
-K_THREAD_DEFINE(hmc5983_id, STACKSIZE, hmc5983, NULL, NULL, NULL,
-		PRIORITY, 0, K_NO_WAIT);
+/*K_THREAD_DEFINE(uart_out_id, STACKSIZE, uart_out, NULL, NULL, NULL,
+		PRIORITY, 0, K_NO_WAIT);*/
+/*K_THREAD_DEFINE(hmc5983_id, STACKSIZE, hmc5983, NULL, NULL, NULL,
+		PRIORITY, 0, K_NO_WAIT);*/

@@ -88,6 +88,7 @@ LoRaMacFrameCtrl_t RxfCtrl;
 uint8_t RxDataLen = 0;
 uint8_t *pRxDataBuf = NULL;
 uint8_t RadioTxBuffer[256];
+K_SEM_DEFINE(radio_can_tx_sem, 1, 1);
 /*!
  * \brief Function to be executed on Radio Tx Done event
  */
@@ -166,6 +167,7 @@ static void LoRaMacOnRadioTxDone( void )
     {
         stTmpCfgParm.netState = LORAMAC_JOINED_IDLE;
     }
+    k_sem_give(&radio_can_tx_sem);
 }
 
 static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr )
@@ -191,7 +193,6 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
 
     bool isMicOk = false;
     Radio.Sleep( );
-
     macHdr.Value = payload[pktHeaderLen++];
     switch( macHdr.Bits.MType )
     {
@@ -204,7 +205,6 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
             LoRaMacRxPayload[0] = macHdr.Value;
             LoRaMacJoinComputeMic( LoRaMacRxPayload, size - LORAMAC_MFR_LEN, stTmpCfgParm.LoRaMacAppKey, &mic );
             mic += LoRaMacDevNonce;
-            printk("%s, %d\r\n",__func__,__LINE__);
             micRx |= ( uint32_t )LoRaMacRxPayload[size - LORAMAC_MFR_LEN];
             micRx |= ( ( uint32_t )LoRaMacRxPayload[size - LORAMAC_MFR_LEN + 1] << 8 );
             micRx |= ( ( uint32_t )LoRaMacRxPayload[size - LORAMAC_MFR_LEN + 2] << 16 );
@@ -226,7 +226,6 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
                 stTmpCfgParm.ChannelMask[2] = (stTmpCfgParm.LoRaMacNetID & 0x00ff0000) >> 16;*/
                 stTmpCfgParm.netState = LORAMAC_JOINED;
                 cfg_parm_restore();
-                printk("%s, %d\r\n",__func__,__LINE__);
                 
                 //onEvent(EV_JOINED);
             }
@@ -398,6 +397,7 @@ static void LoRaMacOnRadioTxTimeout( void )
     {
         stTmpCfgParm.netState = LORAMAC_JOINED_IDLE;
     }
+    k_sem_give(&radio_can_tx_sem);
 }
 
 static void LoRaMacOnRadioRxError( void )
@@ -596,11 +596,8 @@ void LoRaMacStateCheck( void )
                 printk("joined\r\n");
                 stTmpCfgParm.netState = LORAMAC_JOINED_IDLE;
             case LORAMAC_JOINED_IDLE:
+                k_sem_take(&radio_can_tx_sem, K_FOREVER);
                 ret = k_msgq_get(&msgup_msgq, &msg_up_event, K_FOREVER);
-                while(Radio.GetStatus() == RF_TX_RUNNING)
-                {
-                    k_sleep(K_MSEC(100));
-                }
 
                 uint8_t temp[5];
                 temp[0] = unLockStatus.value;

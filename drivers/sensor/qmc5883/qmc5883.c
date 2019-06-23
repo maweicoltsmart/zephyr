@@ -22,7 +22,7 @@ static void qmc5883_convert(struct sensor_value *val, s16_t raw_val,
 {
 	/* val = raw_val / divider */
 	val->val1 = raw_val / divider;
-	val->val2 = (((s64_t)raw_val % divider) * 1000000L) / divider;
+	//val->val2 = (((s64_t)raw_val % divider) * 1000000L) / divider;
 }
 
 static int qmc5883_channel_get(struct device *dev,
@@ -42,11 +42,11 @@ static int qmc5883_channel_get(struct device *dev,
 				 qmc5883_gain[drv_data->gain_idx]);
 	} else { /* chan == SENSOR_CHAN_MAGN_XYZ */
 		qmc5883_convert(val, drv_data->x_sample,
-				 qmc5883_gain[drv_data->gain_idx]);
+				 1);//qmc5883_gain[drv_data->gain_idx]);
 		qmc5883_convert(val + 1, drv_data->y_sample,
-				 qmc5883_gain[drv_data->gain_idx]);
+				 1);//qmc5883_gain[drv_data->gain_idx]);
 		qmc5883_convert(val + 2, drv_data->z_sample,
-				 qmc5883_gain[drv_data->gain_idx]);
+				 1);//qmc5883_gain[drv_data->gain_idx]);
 	}
 
 	return 0;
@@ -105,7 +105,7 @@ int qmc5883_init(struct device *dev)
 		return -EINVAL;
 	}
 
-	chip_cfg[0] = 0x1d;
+	chip_cfg[0] = 0x0d;	// 0d: 2Ga, 1d: 8Ga
 	if (i2c_burst_write(drv_data->i2c, QMC5883_I2C_ADDR,	// ctl register config
 			    0x09, chip_cfg, 1) < 0) {
 		LOG_ERR("Failed to configure chip.");

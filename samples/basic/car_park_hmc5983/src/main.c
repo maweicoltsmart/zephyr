@@ -11,6 +11,7 @@
 #include <misc/__assert.h>
 #include <string.h>
 #include <sensor.h>
+#include <math.h>
 
 /* size of stack area used by each thread */
 #define STACKSIZE 512
@@ -92,7 +93,7 @@ void blink2(void)
 void hmc5983(void)
 {
 	struct device *dev = device_get_binding("HMC5883L");
-
+	double angel_xy,angel_yz,angel_xz;
 	if (dev == NULL) {
 		printk("Could not get HMC5883L device\n");
 		return;
@@ -107,10 +108,13 @@ void hmc5983(void)
 		sensor_channel_get(dev, SENSOR_CHAN_MAGN_XYZ, temp);
 
 
-		printk("x: %d.%08d; y: %d.%08d; z: %d.%08d\n",
+		/*printk("x: %d.%08d; y: %d.%08d; z: %d.%08d\n",
 		      temp[0].val1, temp[0].val2, temp[1].val1, temp[1].val2,
-		      temp[2].val1, temp[2].val2);
-
+		      temp[2].val1, temp[2].val2);*/
+		angel_xy = atan2((double)temp[1].val1,(double)temp[0].val1) * (180 / 3.14159265) + 180;
+		angel_yz = atan2((double)temp[2].val1,(double)temp[1].val1) * (180 / 3.14159265) + 180;
+		angel_xz = atan2((double)temp[2].val1,(double)temp[0].val1) * (180 / 3.14159265) + 180;
+		printk("angel_xy = %f, angel_yz = %f, angel_xz = %f\r\n",angel_xy,angel_yz,angel_xz);
 		k_sleep(1000);
 	}
 }

@@ -113,11 +113,14 @@ static void LoRaMacOnRadioRxError( void );
  * \brief Function executed on Radio Rx Timeout event
  */
 static void LoRaMacOnRadioRxTimeout( void );
-static void RadioSetTx(void)
+static void SetWorkChannel(void)
 {
     uint8_t channellist[24];
     uint8_t enablechannel = 0;
-    Radio.Sleep( );
+    static uint8_t channelupdate = 0;
+
+    GlobalDR = 12;
+    
     for(uint8_t loop1 = 0;loop1 < 3;loop1 ++)
     {
         for(uint8_t loop2 = 0;loop2 < 8;loop2 ++)
@@ -131,15 +134,30 @@ static void RadioSetTx(void)
     }
     if(enablechannel < 1)
     {
-        printk("%s ,%d\r\n",__func__,__LINE__);
+        printk("No channel enabled\r\n");
+        GlobalChannel = 0;
         return;
     }
-    uint8_t loop3 = 0;
-    do{
-          GlobalChannel = channellist[randr(0,enablechannel - 1)];//[loop3 % enablechannel];
-          loop3 ++;
-    }while(!Radio.IsChannelFree ( MODEM_LORA, GlobalChannel * 200000 + 428200000, -90, 5 ) && (loop3 < enablechannel * 2));
-    GlobalDR = 12;//- GlobalChannel % 6;
+    if(stTmpCfgParm.netState >= LORAMAC_JOINED)
+    {
+        GlobalChannel = channellist[stTmpCfgParm.LoRaMacDevEui[0] % 2];
+    }
+    else
+    {
+        do{
+            if(channelupdate > 23)
+            {
+                channelupdate = 0;
+            }
+            GlobalChannel = channellist[channelupdate ++];//[loop3 % enablechannel];
+        }while(!Radio.IsChannelFree ( MODEM_LORA, GlobalChannel * 200000 + 428200000, -90, 5 ));
+    }
+    printk("channel = %d\r\n",GlobalChannel);
+}
+
+static void RadioSetTx(void)
+{
+    Radio.Sleep( );
     Radio.SetChannel( GlobalChannel * 200000 + 428200000 );
     Radio.SetTxConfig( MODEM_LORA, stTmpCfgParm.TxPower, 0, 0,
                                    GlobalDR, LORA_CODINGRATE,
@@ -221,9 +239,9 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
                 stTmpCfgParm.LoRaMacDevAddr |= ( ( uint32_t )LoRaMacRxPayload[8] << 8 );
                 stTmpCfgParm.LoRaMacDevAddr |= ( ( uint32_t )LoRaMacRxPayload[9] << 16 );
                 stTmpCfgParm.LoRaMacDevAddr |= ( ( uint32_t )LoRaMacRxPayload[10] << 24 );
-                /*stTmpCfgParm.ChannelMask[0] = stTmpCfgParm.LoRaMacNetID & 0x000000ff;
+                stTmpCfgParm.ChannelMask[0] = stTmpCfgParm.LoRaMacNetID & 0x000000ff;
                 stTmpCfgParm.ChannelMask[1] = (stTmpCfgParm.LoRaMacNetID & 0x0000ff00) >> 8;
-                stTmpCfgParm.ChannelMask[2] = (stTmpCfgParm.LoRaMacNetID & 0x00ff0000) >> 16;*/
+                stTmpCfgParm.ChannelMask[2] = (stTmpCfgParm.LoRaMacNetID & 0x00ff0000) >> 16;
                 stTmpCfgParm.netState = LORAMAC_JOINED;
                 cfg_parm_restore();
                 
@@ -485,6 +503,7 @@ LoRaMacStatus_t SendFrameOnChannel( uint8_t channel,uint8_t *data,uint8_t len,ui
     LoRaMacBuffer[pktHeaderLen ++] = ( mic >> 24 ) & 0xFF;
     RadioSetTx();    // Send now
     Radio.Send( LoRaMacBuffer, pktHeaderLen );
+    printk("%s, %d\r\n",__func__,GlobalChannel);
     return true;
 }
 
@@ -529,6 +548,7 @@ LoRaMacStatus_t SendJoinRequest( void )
     // BoardDisableIrq();
     Radio.Sleep( );
     //RTC_WakeUpCmd(DISABLE);
+    SetWorkChannel();
     RadioSetTx();
     // Send now
     Radio.Send( LoRaMacBuffer, pktHeaderLen );
@@ -542,10 +562,6 @@ LoRaMacStatus_t LoRaMacInitialization( void )
     //PWR_UltraLowPowerCmd(DISABLE); // TIM2 ±÷”ª·”–—”≥Ÿ
     BoardDisableIrq();
     cfg_parm_dump_to_ram();
-    if(stTmpCfgParm.netState < LORAMAC_JOINED)
-    {
-        cfg_parm_factory_reset();
-    }
     
     SpiInit();
     SX1276IoInit();
@@ -593,6 +609,10 @@ void LoRaMacStateCheck( void )
 
                 break;
             case LORAMAC_JOINED:
+                msg_up_event.event = MSG_UP_LOCK_STATUS_CHANGE_EVENT;
+                k_msgq_put(&msgup_msgq, &msg_up_event, K_NO_WAIT);
+                k_msgq_put(&msgup_msgq, &msg_up_event, K_NO_WAIT);
+                SetWorkChannel();
                 printk("joined\r\n");
                 stTmpCfgParm.netState = LORAMAC_JOINED_IDLE;
             case LORAMAC_JOINED_IDLE:

@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include "LoRaMac.h"
 #include "nvs.h"
+#include <crc.h>
 
 st_cfg_pkg stTmpCfgParm;
 const uint8_t LoRaMacDevEuiInFlash[8] = {0x01,0x00,0x00,0x00,0x14,0x03,0x19,0x20};
@@ -19,6 +20,7 @@ void cfg_parm_factory_reset(void)
     stTmpCfgParm.netState = LORAMAC_IDLE;
     //{ 0x2B, 0x7E, 0x15, 0x16, 0x28, 0xAE, 0xD2, 0xA6, 0xAB, 0xF7, 0x15, 0x88, 0x09, 0xCF, 0x4F, 0x3C }
     //stTmpCfgParm.LoRaMacDevEui = ;
+    memcpy(stTmpCfgParm.LoRaMacDevEui,LoRaMacDevEuiInFlash,8);
     stTmpCfgParm.LoRaMacAppEui[0] = 'M';
     stTmpCfgParm.LoRaMacAppEui[1] = 'J';
     stTmpCfgParm.LoRaMacAppEui[2] = '-';
@@ -48,21 +50,28 @@ void cfg_parm_factory_reset(void)
     //stTmpCfgParm.LoRaMacAppSKey = ;
     stTmpCfgParm.UpLinkCounter = 0;
     stTmpCfgParm.DownLinkCounter = 0;
-    stTmpCfgParm.ChannelMask[0] = 0x41;
-    stTmpCfgParm.ChannelMask[1] = 0x00;
-    stTmpCfgParm.ChannelMask[2] = 0x00;
+    stTmpCfgParm.ChannelMask[0] = 0xff;
+    stTmpCfgParm.ChannelMask[1] = 0xff;
+    stTmpCfgParm.ChannelMask[2] = 0xff;
     stTmpCfgParm.TxPower = 20;
     stTmpCfgParm.destencelevel = 500;// mm
+    stTmpCfgParm.geomagnetic_level = 500;
 
     cfg_parm_restore();
 }
 
 void cfg_parm_restore(void)
 {
+    stTmpCfgParm.paritycheckcrc = crc32_ieee((const u8_t *)&stTmpCfgParm,sizeof(stTmpCfgParm) - sizeof(uint32_t));
     car_park_lock_nvs_restore((uint8_t*)&stTmpCfgParm,sizeof(stTmpCfgParm));
 }
 
 void cfg_parm_dump_to_ram(void)
 {
     car_park_lock_nvs_get((uint8_t*)&stTmpCfgParm,sizeof(stTmpCfgParm));
+    if(crc32_ieee((const u8_t *)&stTmpCfgParm,sizeof(stTmpCfgParm) - sizeof(uint32_t)) != stTmpCfgParm.paritycheckcrc)
+    {
+        printk("param check error! reset it to factory\r\n");
+        cfg_parm_factory_reset();
+    }
 }

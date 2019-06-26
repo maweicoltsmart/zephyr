@@ -369,6 +369,11 @@ void motor_adc_process(void)
         gpio_pin_read(gpio_dev_rejoin, PIN_REJOIN_KEY, &val);
         if(val == 0)
         {
+            do{
+                k_sleep(100);
+                gpio_pin_read(gpio_dev_rejoin, PIN_REJOIN_KEY, &val);
+            }
+            while(val == 0);
             cfg_parm_factory_reset();
             struct msg_up_event_type msg_up_event;
             msg_up_event.event = MSG_UP_PARK_STATUS_CHANGE_EVENT;

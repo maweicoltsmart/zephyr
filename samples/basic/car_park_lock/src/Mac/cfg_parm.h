@@ -41,6 +41,11 @@ struct cfg_pkg{
     unsigned char ChannelMask[3];
     unsigned char TxPower;
     uint16_t destencelevel;
+    uint16_t geomagnetic_level;
+    uint16_t geomagnetic_init_x;
+    uint16_t geomagnetic_init_y;
+    uint16_t geomagnetic_init_z;
+    uint32_t paritycheckcrc;
 };
 typedef struct cfg_pkg st_cfg_pkg;
 typedef struct cfg_pkg* pst_cfg_pkg;

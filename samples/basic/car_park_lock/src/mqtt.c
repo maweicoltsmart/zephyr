@@ -326,7 +326,8 @@ static void *pthread(void* arg)
                     json_object_object_add(pragma,"Data",json_object_new_string(stingdata));
                     memset(datatosend,0,sizeof(datatosend));
                     strcpy(datatosend,json_object_to_json_string(pragma));
-                    mosquitto_publish(globalmosq,NULL,globaltopic,strlen(datatosend)+1,datatosend,0,0);
+                    mosquitto_publish(globalmosq,NULL,globaltopic,strlen(datatosend),datatosend,0,0);
+                    printf("%s\n%s\n", globaltopic,datatosend);
                     json_object_put(pragma);
                     break;
                 default:

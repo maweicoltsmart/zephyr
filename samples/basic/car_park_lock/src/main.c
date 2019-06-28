@@ -10,6 +10,7 @@
 #include <misc/printk.h>
 #include <misc/__assert.h>
 #include <string.h>
+#include "cfg_parm.h"
 
 /* size of stack area used by each thread */
 #define STACKSIZE 256
@@ -59,17 +60,26 @@ void blink(void)
 
 	while(1)
 	{
-		gpio_pin_write(gpio_dev0, LED0, 1);
-		gpio_pin_write(gpio_dev1, LED1, 0);
-		gpio_pin_write(gpio_dev2, LED2, 0);
+		if(stTmpCfgParm.led_mask & 0x01)
+		{
+			gpio_pin_write(gpio_dev0, LED0, 1);
+			gpio_pin_write(gpio_dev1, LED1, 0);
+			gpio_pin_write(gpio_dev2, LED2, 0);
+		}
 		k_sleep(1000);
-		gpio_pin_write(gpio_dev0, LED0, 0);
-		gpio_pin_write(gpio_dev1, LED1, 1);
-		gpio_pin_write(gpio_dev2, LED2, 0);
+		if(stTmpCfgParm.led_mask & 0x02)
+		{
+			gpio_pin_write(gpio_dev0, LED0, 0);
+			gpio_pin_write(gpio_dev1, LED1, 1);
+			gpio_pin_write(gpio_dev2, LED2, 0);
+		}
 		k_sleep(1000);
-		gpio_pin_write(gpio_dev0, LED0, 0);
-		gpio_pin_write(gpio_dev1, LED1, 0);
-		gpio_pin_write(gpio_dev2, LED2, 1);
+		if(stTmpCfgParm.led_mask & 0x04)
+		{
+			gpio_pin_write(gpio_dev0, LED0, 0);
+			gpio_pin_write(gpio_dev1, LED1, 0);
+			gpio_pin_write(gpio_dev2, LED2, 1);
+		}
 		k_sleep(1000);
 	}
 }

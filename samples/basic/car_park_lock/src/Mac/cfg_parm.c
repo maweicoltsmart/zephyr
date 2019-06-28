@@ -11,7 +11,7 @@
 #include <crc.h>
 
 st_cfg_pkg stTmpCfgParm;
-const uint8_t LoRaMacDevEuiInFlash[8] = {0x01,0x00,0x00,0x00,0x14,0x03,0x19,0x20};
+const uint8_t LoRaMacDevEuiInFlash[8] = {0x02,0x00,0x00,0x00,0x14,0x03,0x19,0x20};
 
 void cfg_parm_factory_reset(void)
 {
@@ -54,8 +54,12 @@ void cfg_parm_factory_reset(void)
     stTmpCfgParm.ChannelMask[1] = 0xff;
     stTmpCfgParm.ChannelMask[2] = 0xff;
     stTmpCfgParm.TxPower = 20;
+    stTmpCfgParm.geomagnetic_init_x = 0;
+    stTmpCfgParm.geomagnetic_init_y = 0;
+    stTmpCfgParm.geomagnetic_init_z = 0;
     stTmpCfgParm.destencelevel = 500;// mm
     stTmpCfgParm.geomagnetic_level = 500;
+    stTmpCfgParm.led_mask = 0x07;
 
     cfg_parm_restore();
 }

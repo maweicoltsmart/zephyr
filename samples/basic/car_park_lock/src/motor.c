@@ -85,10 +85,22 @@ void motor_going_down(void)
 
 void motor_going_up(void)
 {
-    gpio_pin_write(gpio_dev_pwm, PIN_MOTOR_PWM, 0); // IN2
-    gpio_pin_write(gpio_dev_brak, PIN_MOTOR_BRAK, 1); // EN
-    gpio_pin_write(gpio_dev_dir, PIN_MOTOR_DIR, 1); // IN1
-    printk("motor going up\r\n");
+    u32_t val;
+    if(unLockStatus.sensor1 || unLockStatus.sensor2)
+    {
+        gpio_pin_read(gpio_dev_key2, PIN_MOTOR_KEY1_DOWN, &val);
+        if(val != 0)
+        {
+            motor_going_down();
+        }
+    }
+    else
+    {
+        gpio_pin_write(gpio_dev_pwm, PIN_MOTOR_PWM, 0); // IN2
+        gpio_pin_write(gpio_dev_brak, PIN_MOTOR_BRAK, 1); // EN
+        gpio_pin_write(gpio_dev_dir, PIN_MOTOR_DIR, 1); // IN1
+        printk("motor going up\r\n");
+    }
 }
 
 void motor_going_stop(void)
@@ -155,6 +167,12 @@ void motor_process(void)
                         motor_going_up();
                         enLockCurrentStatus = EN_LOCK_GOING_UP;
                     }
+                    else
+                    {
+                        enLockCurrentStatus = EN_LOCK_CURRENT_STATUS_UP;
+                        unLockStatus.motor = 1;
+                        motor_going_stop();
+                    }
                 }
                 else
                 {
@@ -163,7 +181,7 @@ void motor_process(void)
                         motor_going_down();
                         enLockCurrentStatus = EN_LOCK_GOING_DOWN;
                     }
-                    else if(motor_event.event == MOTOR_CURRENT_ADC_BRAK_EVENT)
+                    else if((motor_event.event == MOTOR_CURRENT_ADC_BRAK_EVENT) || (motor_event.event == MOTOR_KEY1_DOWN_EVENT))
                     {
                         motor_going_stop();
                     }
@@ -218,6 +236,12 @@ void motor_process(void)
                         motor_going_down();
                         enLockCurrentStatus = EN_LOCK_GOING_DOWN;
                     }
+                    else
+                    {
+                        enLockCurrentStatus = EN_LOCK_CURRENT_STATUS_DOWN;
+                        unLockStatus.motor = 0;
+                        motor_going_stop();
+                    }
                 }
                 else
                 {
@@ -226,7 +250,7 @@ void motor_process(void)
                         motor_going_up();
                         enLockCurrentStatus = EN_LOCK_GOING_UP;
                     }
-                    else if(motor_event.event == MOTOR_CURRENT_ADC_BRAK_EVENT)
+                    else if((motor_event.event == MOTOR_CURRENT_ADC_BRAK_EVENT) || (motor_event.event == MOTOR_KEY2_UP_EVENT))
                     {
                         motor_going_stop();
                     }
@@ -535,6 +559,7 @@ static void uart1_fifo_callback(struct device *dev)
         }
     }*/
 }
+int16_t geomagnetic_current_x = 0,geomagnetic_current_y = 0,geomagnetic_current_z = 0;
 
 void motor_cmd_process(void)
 {
@@ -561,6 +586,7 @@ void motor_cmd_process(void)
 
     bool sensor1lastvalue = !unLockStatus.sensor1;
     bool sensor2lastvalue = !unLockStatus.sensor2;
+    uint8_t sensor1truecnt = 0,sensor1falsecnt = 0;
 
 	while(1)
 	{
@@ -618,7 +644,9 @@ void motor_cmd_process(void)
                         if(destense < stTmpCfgParm.destencelevel)
                         {
                             unLockStatus.sensor1 = 1;
-                            if(sensor1lastvalue != unLockStatus.sensor1)
+                            sensor1falsecnt = 0;
+                            sensor1truecnt ++;
+                            if((sensor1lastvalue != unLockStatus.sensor1) && (sensor1truecnt > 5))
                             {
                                 sensor1lastvalue = unLockStatus.sensor1;
                                 struct msg_up_event_type msg_up_event;
@@ -630,7 +658,9 @@ void motor_cmd_process(void)
                         else
                         {
                             unLockStatus.sensor1 = 0;
-                            if(sensor1lastvalue != unLockStatus.sensor1)
+                            sensor1truecnt = 0;
+                            sensor1falsecnt ++;
+                            if((sensor1lastvalue != unLockStatus.sensor1) && (sensor1falsecnt > 5))
                             {
                                 sensor1lastvalue = unLockStatus.sensor1;
                                 struct msg_up_event_type msg_up_event;

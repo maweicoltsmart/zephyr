@@ -42,9 +42,10 @@ struct cfg_pkg{
     unsigned char TxPower;
     uint16_t destencelevel;
     uint16_t geomagnetic_level;
-    uint16_t geomagnetic_init_x;
-    uint16_t geomagnetic_init_y;
-    uint16_t geomagnetic_init_z;
+    int16_t geomagnetic_init_x;
+    int16_t geomagnetic_init_y;
+    int16_t geomagnetic_init_z;
+    uint8_t led_mask;
     uint32_t paritycheckcrc;
 };
 typedef struct cfg_pkg st_cfg_pkg;

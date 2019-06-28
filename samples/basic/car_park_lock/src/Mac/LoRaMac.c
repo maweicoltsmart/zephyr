@@ -338,6 +338,8 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
                         else if(LoRaMacRxPayload[0] == 1) // set destence param
                         {
                             stTmpCfgParm.destencelevel = LoRaMacRxPayload[1] | LoRaMacRxPayload[2] << 8;
+                            stTmpCfgParm.geomagnetic_level = LoRaMacRxPayload[3] | LoRaMacRxPayload[4] << 8;
+                            cfg_parm_restore();
                         }
                         else if(LoRaMacRxPayload[0] == 2) // motor cmd
                         {
@@ -354,7 +356,18 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
                                 k_msgq_put(&motor_msgq, &motor_event, K_NO_WAIT);
                             }
                         }
-
+                        else if(LoRaMacRxPayload[0] == 3) // calibration
+                        {
+                            stTmpCfgParm.geomagnetic_init_x = geomagnetic_current_x;
+                            stTmpCfgParm.geomagnetic_init_y = geomagnetic_current_y;
+                            stTmpCfgParm.geomagnetic_init_z = geomagnetic_current_z;
+                            cfg_parm_restore();
+                        }
+                        else if(LoRaMacRxPayload[0] == 4) // led mask
+                        {
+                            stTmpCfgParm.led_mask = LoRaMacRxPayload[1];
+                            cfg_parm_restore();
+                        }
                         #if 0
                         //onEvent(EV_RXCOMPLETE);
                         if(RxfCtrl.Bits.Ack)

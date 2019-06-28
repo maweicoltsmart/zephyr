@@ -43,5 +43,6 @@ extern struct k_msgq msgup_msgq;
 extern void my_button_init(void);
 extern un_LockStatus unLockStatus;
 extern uint16_t destensecopy[];
+extern int16_t geomagnetic_current_x,geomagnetic_current_y,geomagnetic_current_z;
 
 #endif

@@ -356,7 +356,7 @@ static void *pthread(void* arg)
                     {
                         printf("upcmdcnt = %d, downcmdcnt = %d, upcnt = %d, downcnt = %d, upokpercent = %d\%, downokpercent = %d\%\r\n",upcmdcnt,downcmdcnt,upcnt,downcnt,upcnt * 100 / upcmdcnt,downcnt * 100 / downcmdcnt);
                     }*/
-                    sleep(5);
+                    sleep(7);
                     /*break;
                 default:
                     break;

@@ -113,11 +113,12 @@ static void LoRaMacOnRadioRxError( void );
  * \brief Function executed on Radio Rx Timeout event
  */
 static void LoRaMacOnRadioRxTimeout( void );
+static uint8_t channelupdate = 0;
+
 static void SetWorkChannel(void)
 {
     uint8_t channellist[24];
     uint8_t enablechannel = 0;
-    static uint8_t channelupdate = 0;
 
     GlobalDR = 12;
     
@@ -210,6 +211,7 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
     uint8_t *appSKey = stTmpCfgParm.LoRaMacAppSKey;
 
     bool isMicOk = false;
+    printk("%s, %d\r\n",__func__,__LINE__);
     Radio.Sleep( );
     macHdr.Value = payload[pktHeaderLen++];
     switch( macHdr.Bits.MType )
@@ -251,6 +253,7 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
         case FRAME_TYPE_DATA_CONFIRMED_DOWN:
         case FRAME_TYPE_DATA_UNCONFIRMED_DOWN:
             {
+                printk("%s, %d\r\n",__func__,__LINE__);
                 if( stTmpCfgParm.netState < LORAMAC_JOINED )
                 {
                     RadioSetRx();
@@ -315,6 +318,7 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
 
                 if( isMicOk == true )
                 {
+                    printk("%s, %d\r\n",__func__,__LINE__);
                     if( ( ( size - 4 ) - appPayloadStartIndex ) > 0 )
                     {
                         port = payload[appPayloadStartIndex++];
@@ -331,8 +335,8 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
                             struct msg_up_event_type msg_up_event;
                             msg_up_event.event = MSG_UP_PARK_STATUS_REQ_EVENT;
                             k_msgq_put(&msgup_msgq, &msg_up_event, K_NO_WAIT);
-                            RadioSetRx();
-                            Radio.Rx(0);
+                            //RadioSetRx();
+                            //Radio.Rx(0);
                             return;
                         }
                         else if(LoRaMacRxPayload[0] == 1) // set destence param
@@ -343,17 +347,32 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
                         }
                         else if(LoRaMacRxPayload[0] == 2) // motor cmd
                         {
+                            printk("%s, %d\r\n",__func__,LoRaMacRxPayload[1]);
                             if(LoRaMacRxPayload[1] == 0)
                             {
-                                struct motor_event_type motor_event;
+                                /*struct motor_event_type motor_event;
                                 motor_event.event = MOTOR_CMD_DOWN_EVENT;
-                                k_msgq_put(&motor_msgq, &motor_event, K_NO_WAIT);
+                                k_msgq_put(&motor_msgq, &motor_event, K_NO_WAIT);*/
+                                enCMD = EN_CMD_DOWN;
+                                if(unLockStatus.motor == 0)
+                                {
+                                    struct msg_up_event_type msg_up_event;
+                                    msg_up_event.event = MSG_UP_PARK_STATUS_REQ_EVENT;
+                                    k_msgq_put(&msgup_msgq, &msg_up_event, 2);
+                                }
                             }
                             else if(LoRaMacRxPayload[1] == 1)
                             {
-                                struct motor_event_type motor_event;
+                                /*struct motor_event_type motor_event;
                                 motor_event.event = MOTOR_CMD_UP_EVENT;
-                                k_msgq_put(&motor_msgq, &motor_event, K_NO_WAIT);
+                                k_msgq_put(&motor_msgq, &motor_event, K_NO_WAIT);*/
+                                enCMD = EN_CMD_UP;
+                                if(unLockStatus.motor == 1)
+                                {
+                                    struct msg_up_event_type msg_up_event;
+                                    msg_up_event.event = MSG_UP_PARK_STATUS_REQ_EVENT;
+                                    k_msgq_put(&msgup_msgq, &msg_up_event, 2);
+                                }
                             }
                         }
                         else if(LoRaMacRxPayload[0] == 3) // calibration
@@ -601,7 +620,7 @@ LoRaMacStatus_t LoRaMacInitialization( void )
     BoardEnableIrq();
     return LORAMAC_STATUS_OK;
 }
-K_MSGQ_DEFINE(msgup_msgq, sizeof(struct motor_event_type), 20, 4);
+K_MSGQ_DEFINE(msgup_msgq, sizeof(en_MSG_UP_EVENT), 20, 4);
 
 void LoRaMacStateCheck( void )
 {    
@@ -622,18 +641,25 @@ void LoRaMacStateCheck( void )
 
                 break;
             case LORAMAC_JOINED:
+                unLockStatus.motor = 0;
+                unLockStatus.sensor1 = 0;
+                unLockStatus.sensor2 = 0;
                 msg_up_event.event = MSG_UP_LOCK_STATUS_CHANGE_EVENT;
                 k_msgq_put(&msgup_msgq, &msg_up_event, K_NO_WAIT);
-                k_msgq_put(&msgup_msgq, &msg_up_event, K_NO_WAIT);
+                //k_msgq_put(&msgup_msgq, &msg_up_event, K_NO_WAIT);
                 SetWorkChannel();
                 printk("joined\r\n");
                 stTmpCfgParm.netState = LORAMAC_JOINED_IDLE;
             case LORAMAC_JOINED_IDLE:
                 k_sem_take(&radio_can_tx_sem, K_FOREVER);
                 ret = k_msgq_get(&msgup_msgq, &msg_up_event, K_FOREVER);
-
+                if(msg_up_event.event == MSG_UP_PARK_STATUS_REJOIN_EVENT)
+                {
+                    channelupdate = 0;
+                    break;
+                }
                 uint8_t temp[5];
-                temp[0] = unLockStatus.value;
+                temp[0] = unLockStatus.motor | (unLockStatus.sensor1 << 1) | (unLockStatus.sensor2 << 2);
                 temp[1] = destensecopy[0] & 0x00ff;
                 temp[2] = (destensecopy[0] >> 8) & 0x00ff;
                 temp[3] = destensecopy[1] & 0x00ff;
@@ -689,7 +715,7 @@ void LoRaRadioEventCheck( void )
     }
 }
 
-K_THREAD_DEFINE(lora_mac_id, 512, LoRaMacStateCheck, NULL, NULL, NULL,
+K_THREAD_DEFINE(lora_mac_id, 600, LoRaMacStateCheck, NULL, NULL, NULL,
         PRIORITY, 0, K_NO_WAIT);
-K_THREAD_DEFINE(lora_radio_id, 512, LoRaRadioEventCheck, NULL, NULL, NULL,
+K_THREAD_DEFINE(lora_radio_id, 600, LoRaRadioEventCheck, NULL, NULL, NULL,
         PRIORITY, 0, K_NO_WAIT);

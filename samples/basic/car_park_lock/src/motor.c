@@ -71,36 +71,25 @@ typedef enum{
 en_LockCurrentStatus enLockCurrentStatus = EN_LOCK_CURRENT_STATUS_DOWN;
 un_LockStatus unLockStatus;
 uint16_t destensecopy[2] = {0};
+en_CMD enCMD;
 
-K_MSGQ_DEFINE(motor_msgq, sizeof(struct motor_event_type), 20, 4);
-struct device *gpio_dev_brak,*gpio_dev_dir,*gpio_dev_pwm,*gpio_dev_key1,*gpio_dev_key2;
+//K_MSGQ_DEFINE(motor_msgq, sizeof(struct motor_event_type), 20, 4);
+struct device *gpio_dev_brak = NULL,*gpio_dev_dir = NULL,*gpio_dev_pwm = NULL,*gpio_dev_key1 = NULL,*gpio_dev_key2 = NULL,*adc_dev = NULL,*gpio_dev_rejoin = NULL;
 
 void motor_going_down(void)
 {
     gpio_pin_write(gpio_dev_pwm, PIN_MOTOR_PWM, 1); // IN2
     gpio_pin_write(gpio_dev_brak, PIN_MOTOR_BRAK, 1); // EN
     gpio_pin_write(gpio_dev_dir, PIN_MOTOR_DIR, 0); // IN1
-    //printk("motor going down\r\n");
+    printk("motor going down\r\n");
 }
 
 void motor_going_up(void)
 {
-    u32_t val;
-    if(unLockStatus.sensor1 || unLockStatus.sensor2)
-    {
-        gpio_pin_read(gpio_dev_key2, PIN_MOTOR_KEY1_DOWN, &val);
-        if(val != 0)
-        {
-            motor_going_down();
-        }
-    }
-    else
-    {
-        gpio_pin_write(gpio_dev_pwm, PIN_MOTOR_PWM, 0); // IN2
-        gpio_pin_write(gpio_dev_brak, PIN_MOTOR_BRAK, 1); // EN
-        gpio_pin_write(gpio_dev_dir, PIN_MOTOR_DIR, 1); // IN1
-        printk("motor going up\r\n");
-    }
+    gpio_pin_write(gpio_dev_pwm, PIN_MOTOR_PWM, 0); // IN2
+    gpio_pin_write(gpio_dev_brak, PIN_MOTOR_BRAK, 1); // EN
+    gpio_pin_write(gpio_dev_dir, PIN_MOTOR_DIR, 1); // IN1
+    printk("motor going up\r\n");
 }
 
 void motor_going_stop(void)
@@ -111,12 +100,103 @@ void motor_going_stop(void)
     printk("motor going stop\r\n");
 }
 
+static struct device *init_adc(void)
+{
+    int ret;
+    struct device *adc_dev = device_get_binding(ADC_DEVICE_NAME);
+
+    ret = adc_channel_setup(adc_dev, &m_1st_channel_cfg);
+
+    (void)memset(m_sample_buffer, 0, sizeof(m_sample_buffer));
+
+    return adc_dev;
+}
+
+static s16_t check_samples(int expected_count)
+{
+    int i;
+    s16_t sample_value;
+
+    for (i = 0; i < BUFFER_SIZE; i++) {
+        sample_value = m_sample_buffer[i];
+
+        //printk("adc value = %d\r\n", sample_value);
+    }
+    return sample_value;
+}
+
+en_MOTOR_KEY motor_key_read(void)
+{
+    u32_t val1 = 0U;
+    u32_t val2 = 0U;
+
+    gpio_pin_read(gpio_dev_key1, PIN_MOTOR_KEY1_DOWN, &val1);
+    gpio_pin_read(gpio_dev_key2, PIN_MOTOR_KEY2_UP, &val2);
+    //struct motor_event_type motor_event;
+        
+    if(val1 == 0)
+    {
+        unLockStatus.motor = 0; // down key detect
+        return EN_MOTOR_KEY_DOWN; 
+    }
+
+    if(val2 == 0)
+    {
+        unLockStatus.motor = 1; // up key detect
+        return EN_MOTOR_KEY_UP;
+    }
+    return EN_MOTOR_KEY_DUMMY;
+}
+
+
+bool current_detect(void)
+{
+    const struct adc_sequence sequence = {
+        .channels    = BIT(ADC_1ST_CHANNEL_ID),
+        .buffer      = m_sample_buffer,
+        .buffer_size = sizeof(m_sample_buffer),
+        .resolution  = ADC_RESOLUTION,
+    };
+    s16_t sample_value;
+
+    adc_read(adc_dev, &sequence);
+    sample_value = check_samples(1);
+    if(sample_value > 500)
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
+bool rejoin_key_detect(void)
+{
+    u32_t val = 0U;
+    gpio_pin_read(gpio_dev_rejoin, PIN_REJOIN_KEY, &val);
+    if(val == 0)
+    {
+        do{
+            k_sleep(100);
+            gpio_pin_read(gpio_dev_rejoin, PIN_REJOIN_KEY, &val);
+        }
+        while(val == 0);
+        cfg_parm_factory_reset();
+        struct msg_up_event_type msg_up_event;
+        msg_up_event.event = MSG_UP_PARK_STATUS_REJOIN_EVENT;
+        k_msgq_put(&msgup_msgq, &msg_up_event, 2);
+        printk("Rejoin again\r\n");
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
 void motor_process(void)
 {
-	struct motor_event_type motor_event;
-    int ret;
-    u32_t val = 0U;
-
 	gpio_dev_brak = device_get_binding(PORT_MOTOR_BRAK);
 	__ASSERT_NO_MSG(gpio_dev_brak != NULL);
 	gpio_pin_configure(gpio_dev_brak, PIN_MOTOR_BRAK, GPIO_DIR_OUT | GPIO_PUD_PULL_UP);
@@ -128,150 +208,118 @@ void motor_process(void)
 	gpio_dev_pwm = device_get_binding(PORT_MOTOR_PWM);
 	__ASSERT_NO_MSG(gpio_dev_pwm != NULL);
 	gpio_pin_configure(gpio_dev_pwm, PIN_MOTOR_PWM, GPIO_DIR_OUT | GPIO_PUD_PULL_UP);
-
-	//my_button_init();
     
+    gpio_dev_key1 = device_get_binding(PORT_MOTOR_KEY1_DOWN);
+    if (!gpio_dev_key1) {
+        printk("error\n");
+        return;
+    }
+    gpio_pin_configure(gpio_dev_key1, PIN_MOTOR_KEY1_DOWN,
+               GPIO_DIR_IN |  GPIO_PUD_PULL_UP);
+    gpio_dev_key2 = device_get_binding(PORT_MOTOR_KEY2_UP);
+    if (!gpio_dev_key2) {
+        printk("error\n");
+        return;
+    }
+    gpio_pin_configure(gpio_dev_key2, PIN_MOTOR_KEY2_UP,
+               GPIO_DIR_IN |  GPIO_PUD_PULL_UP);
+
+    gpio_dev_rejoin = device_get_binding("GPIOF");
+    if (!gpio_dev_rejoin) {
+        printk("error\n");
+        return;
+    }
+
+    gpio_pin_configure(gpio_dev_rejoin, PIN_REJOIN_KEY, GPIO_DIR_IN | GPIO_PUD_PULL_UP);
+
+    adc_dev = init_adc();
+
+    if (!adc_dev) {
+        printk("do not find adc device\r\n");
+        return;
+    }
+	//my_button_init();
+    unLockStatus.motor = 0;
+    unLockStatus.sensor1 = 0;
+    unLockStatus.sensor2 = 0;
     
     while(1)
     {
+        k_sleep(20);
+        rejoin_key_detect();
         switch(enLockCurrentStatus)
         {
             case EN_LOCK_CURRENT_STATUS_DOWN:
-                unLockStatus.motor = 0;
-                ret = k_msgq_get(&motor_msgq, &motor_event, 1000);
-                if(ret == -EAGAIN)
+                if(enCMD == EN_CMD_UP)
                 {
-                    gpio_pin_read(gpio_dev_key1, PIN_MOTOR_KEY1_DOWN, &val);
-                    if(val != 0)
-                    {
-                        motor_going_down();
-                        enLockCurrentStatus = EN_LOCK_GOING_DOWN;
-                    }
+                    motor_going_up();
+                    enLockCurrentStatus = EN_LOCK_GOING_UP;
+                    break;
                 }
-                else
+                if(motor_key_read() != EN_MOTOR_KEY_DOWN)
                 {
-                    if(motor_event.event == MOTOR_CMD_UP_EVENT)
-                    {
-                        motor_going_up();
-                        enLockCurrentStatus = EN_LOCK_GOING_UP;
-                    }
+                    motor_going_down();
+                    enLockCurrentStatus = EN_LOCK_GOING_DOWN;
                 }
                 break;
             case EN_LOCK_GOING_UP:
-                ret = k_msgq_get(&motor_msgq, &motor_event, 1000);
-                if(ret == -EAGAIN)
+                if(current_detect())
                 {
-                    gpio_pin_read(gpio_dev_key2, PIN_MOTOR_KEY2_UP, &val);
-                    if(val != 0)
-                    {
-                        motor_going_up();
-                        enLockCurrentStatus = EN_LOCK_GOING_UP;
-                    }
-                    else
-                    {
-                        enLockCurrentStatus = EN_LOCK_CURRENT_STATUS_UP;
-                        unLockStatus.motor = 1;
-                        motor_going_stop();
-                    }
+                    motor_going_stop();
+                    enLockCurrentStatus = EN_LOCK_GOING_UP;
                 }
-                else
+                if(unLockStatus.sensor1)
                 {
-                    if(motor_event.event == MOTOR_CMD_DOWN_EVENT)
+                    motor_going_down();
+                    enLockCurrentStatus = EN_LOCK_GOING_DOWN;
+                    break;
+                }
+                if(motor_key_read() == EN_MOTOR_KEY_UP)
+                {
+                    motor_going_stop();
+                    enLockCurrentStatus = EN_LOCK_CURRENT_STATUS_UP;
+                    if(stTmpCfgParm.netState >= LORAMAC_JOINED)
                     {
-                        motor_going_down();
-                        enLockCurrentStatus = EN_LOCK_GOING_DOWN;
+                        printk("send to server\r\n");
+                        struct msg_up_event_type msg_up_event;
+                        msg_up_event.event = MSG_UP_LOCK_STATUS_CHANGE_EVENT;
+                        k_msgq_put(&msgup_msgq, &msg_up_event, 2);
                     }
-                    else if((motor_event.event == MOTOR_CURRENT_ADC_BRAK_EVENT) || (motor_event.event == MOTOR_KEY1_DOWN_EVENT))
-                    {
-                        motor_going_stop();
-                    }
-                    else if(motor_event.event == MOTOR_CMD_UP_EVENT)
-                    {
-                        motor_going_up();
-                    }
-                    else if(motor_event.event == MOTOR_KEY2_UP_EVENT)
-                    {
-                        motor_going_stop();
-                        enLockCurrentStatus = EN_LOCK_CURRENT_STATUS_UP;
-                        unLockStatus.motor = 1;
-                        if(stTmpCfgParm.netState >= LORAMAC_JOINED)
-                        {
-                            struct msg_up_event_type msg_up_event;
-                            msg_up_event.event = MSG_UP_LOCK_STATUS_CHANGE_EVENT;
-                            k_msgq_put(&msgup_msgq, &msg_up_event, K_NO_WAIT);
-                            printk("send to server\r\n");
-                        }
-                        printk("up key detect\r\n");
-                    }
+                    break;
                 }
                 break;
             case EN_LOCK_CURRENT_STATUS_UP:
-                unLockStatus.motor = 1;
-                ret = k_msgq_get(&motor_msgq, &motor_event, 1000);
-                if(ret == -EAGAIN)
+                if(enCMD == EN_CMD_DOWN)
                 {
-                    gpio_pin_read(gpio_dev_key2, PIN_MOTOR_KEY2_UP, &val);
-                    if(val != 0)
-                    {
-                        motor_going_up();
-                        enLockCurrentStatus = EN_LOCK_GOING_UP;
-                    }
+                    motor_going_down();
+                    enLockCurrentStatus = EN_LOCK_GOING_DOWN;
+                    break;
                 }
-                else
+                if(motor_key_read() != EN_MOTOR_KEY_UP)
                 {
-                    if(motor_event.event == MOTOR_CMD_DOWN_EVENT)
-                    {
-                        motor_going_down();
-                        enLockCurrentStatus = EN_LOCK_GOING_DOWN;
-                    }
+                    motor_going_up();
+                    enLockCurrentStatus = EN_LOCK_GOING_UP;
                 }
                 break;
             case EN_LOCK_GOING_DOWN:
-                ret = k_msgq_get(&motor_msgq, &motor_event, 1000);
-                if(ret == -EAGAIN)
+                if(current_detect())
                 {
-                    gpio_pin_read(gpio_dev_key1, PIN_MOTOR_KEY1_DOWN, &val);
-                    if(val != 0)
-                    {
-                        motor_going_down();
-                        enLockCurrentStatus = EN_LOCK_GOING_DOWN;
-                    }
-                    else
-                    {
-                        enLockCurrentStatus = EN_LOCK_CURRENT_STATUS_DOWN;
-                        unLockStatus.motor = 0;
-                        motor_going_stop();
-                    }
+                    motor_going_stop();
+                    enLockCurrentStatus = EN_LOCK_GOING_DOWN;
+                    break;
                 }
-                else
+                if(motor_key_read() == EN_MOTOR_KEY_DOWN)
                 {
-                    if(motor_event.event == MOTOR_CMD_UP_EVENT)
+                    motor_going_stop();
+                    enLockCurrentStatus = EN_LOCK_CURRENT_STATUS_DOWN;
+                    if(stTmpCfgParm.netState >= LORAMAC_JOINED)
                     {
-                        motor_going_up();
-                        enLockCurrentStatus = EN_LOCK_GOING_UP;
+                        printk("send to server\r\n");
+                        struct msg_up_event_type msg_up_event;
+                        msg_up_event.event = MSG_UP_LOCK_STATUS_CHANGE_EVENT;
+                        k_msgq_put(&msgup_msgq, &msg_up_event, 2);
                     }
-                    else if((motor_event.event == MOTOR_CURRENT_ADC_BRAK_EVENT) || (motor_event.event == MOTOR_KEY2_UP_EVENT))
-                    {
-                        motor_going_stop();
-                    }
-                    else if(motor_event.event == MOTOR_CMD_DOWN_EVENT)
-                    {
-                        motor_going_down();
-                    }
-                    else if(motor_event.event == MOTOR_KEY1_DOWN_EVENT)
-                    {
-                        motor_going_stop();
-                        enLockCurrentStatus = EN_LOCK_CURRENT_STATUS_DOWN;
-                        unLockStatus.motor = 0;
-                        if(stTmpCfgParm.netState >= LORAMAC_JOINED)
-                        {
-                            struct msg_up_event_type msg_up_event;
-                            msg_up_event.event = MSG_UP_LOCK_STATUS_CHANGE_EVENT;
-                            k_msgq_put(&msgup_msgq, &msg_up_event, K_NO_WAIT);
-                            printk("send to server\r\n");
-                        }
-                        printk("down key detect\r\n");
-                    }
+                    break;
                 }
                 break;
             default:
@@ -281,32 +329,7 @@ void motor_process(void)
 	
 }
 
-static struct device *init_adc(void)
-{
-	int ret;
-	struct device *adc_dev = device_get_binding(ADC_DEVICE_NAME);
-
-	ret = adc_channel_setup(adc_dev, &m_1st_channel_cfg);
-
-	(void)memset(m_sample_buffer, 0, sizeof(m_sample_buffer));
-
-	return adc_dev;
-}
-
-static s16_t check_samples(int expected_count)
-{
-	int i;
-	s16_t sample_value;
-
-	for (i = 0; i < BUFFER_SIZE; i++) {
-		sample_value = m_sample_buffer[i];
-
-		//printk("adc value = %d\r\n", sample_value);
-	}
-	return sample_value;
-}
-
-void motor_adc_process(void)
+/*void motor_adc_process(void)
 {
 	int ret;
 	struct motor_event_type motor_event;
@@ -408,7 +431,7 @@ void motor_adc_process(void)
 
 		k_sleep(10);
 	}
-}
+}*/
 
 #define UART2_DEVICE_NAME    "UART_2"
 struct k_sem rx_sem;
@@ -564,7 +587,6 @@ int16_t geomagnetic_current_x = 0,geomagnetic_current_y = 0,geomagnetic_current_
 void motor_cmd_process(void)
 {
 	char byte;
-	struct motor_event_type motor_event;
 
 	uart2_dev = device_get_binding(UART2_DEVICE_NAME);
     uart1_dev = device_get_binding(UART1_DEVICE_NAME);
@@ -597,22 +619,18 @@ void motor_cmd_process(void)
 			{
 				case 'F':
 				case 'f':
-	    			motor_event.event = MOTOR_CMD_DOWN_EVENT;
-	    			k_msgq_put(&motor_msgq, &motor_event, K_NO_WAIT);
+                    enCMD = EN_CMD_DOWN;
 					break;
 				case 'B':
 				case 'b':
-					motor_event.event = MOTOR_CMD_UP_EVENT;
-	    			k_msgq_put(&motor_msgq, &motor_event, K_NO_WAIT);
+					enCMD = EN_CMD_UP;
 					break;
 				case 'S':
 				case 's':
-					motor_event.event = MOTOR_CURRENT_ADC_BRAK_EVENT;
-	    			k_msgq_put(&motor_msgq, &motor_event, K_NO_WAIT);
+					
 					break;
 				default:
-					motor_event.event = MOTOR_CURRENT_ADC_BRAK_EVENT;
-	    			k_msgq_put(&motor_msgq, &motor_event, K_NO_WAIT);
+					break;
 			}
 		}
 
@@ -677,9 +695,9 @@ void motor_cmd_process(void)
 	}
 }
 
-K_THREAD_DEFINE(motor_process_id, 512, motor_process, NULL, NULL, NULL,
+K_THREAD_DEFINE(motor_process_id, 600, motor_process, NULL, NULL, NULL,
 		8, 0, K_NO_WAIT);
-K_THREAD_DEFINE(motor_adc_id, 512, motor_adc_process, NULL, NULL, NULL,
-		7, 0, K_NO_WAIT);
-K_THREAD_DEFINE(motor_cmd_id, 300, motor_cmd_process, NULL, NULL, NULL,
+/*K_THREAD_DEFINE(motor_adc_id, 512, motor_adc_process, NULL, NULL, NULL,
+		7, 0, K_NO_WAIT);*/
+K_THREAD_DEFINE(motor_cmd_id, 400, motor_cmd_process, NULL, NULL, NULL,
 		7, 0, K_NO_WAIT);

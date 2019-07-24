@@ -89,7 +89,7 @@ void blink(void)
 	blink(PORT1, 1000, LED1, 1);
 }
 */
-K_THREAD_DEFINE(blink_id, STACKSIZE, blink, NULL, NULL, NULL,
+K_THREAD_DEFINE(blink_id, 400, blink, NULL, NULL, NULL,
 		PRIORITY, 0, K_NO_WAIT);
 /*K_THREAD_DEFINE(blink2_id, STACKSIZE, blink2, NULL, NULL, NULL,
 		PRIORITY, 0, K_NO_WAIT);*/

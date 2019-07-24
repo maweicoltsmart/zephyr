@@ -39,6 +39,8 @@ uint8_t globaldatabuf[1024] = {0};
 bool rx1stpkgflag = false;
 struct mosquitto *globalmosq = NULL;
 
+uint32_t downcmdcnt = 0,upcmdcnt = 0,downcnt = 0,upcnt = 0;
+
 static const int8_t hexval[] = {
     /*00-1F*/ -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
     /*20-3F*/ -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,-1,-1,-1,-1,-1,-1,
@@ -219,6 +221,18 @@ void my_message_callback(struct mosquitto *mosq, void *userdata, const struct mo
             printf("%02X\n", tempdata[4]);
             un_LockStatus unLockStatus;
             unLockStatus.value = tempdata[0];
+            if(unLockStatus.value & 0x01)
+            {
+                upcnt ++;
+            }
+            else
+            {
+                downcnt ++;
+            }
+            if(upcmdcnt && downcmdcnt)
+            {
+                printf("upcmdcnt = %d, downcmdcnt = %d, upcnt = %d, downcnt = %d, upokpercent = %d\%, downokpercent = %d\%\r\n",upcmdcnt,downcmdcnt,upcnt,downcnt,upcnt * 100 / upcmdcnt,downcnt * 100 / downcmdcnt);
+            }
             sensor1 =  tempdata[1] | (tempdata[2] << 8);
             sensor2 =  tempdata[3] | (tempdata[4] << 8);
             printf("\rmotor status = %d, sensor1 status = %d, sensor2 status = %d; sensor1 = %d, sensor2 = %d", unLockStatus.motor,unLockStatus.sensor1,unLockStatus.sensor2,sensor1,sensor2);
@@ -281,14 +295,14 @@ static void *pthread(void* arg)
     uint8_t stingdata[7] = {0};
     uint8_t cmd;
     uint8_t datatosend[1024] = {0};
-
+    int indication;
     while(1)
     {
     	if(rx1stpkgflag)
     	{
-            scanf("%c",&cmd);
+            /*scanf("%c",&cmd);*/
             memset(stingdata,0,sizeof(stingdata));
-            switch(cmd)
+            /*switch(cmd)
             {
                 case 'g':
                     databyte[0] = 0;
@@ -300,12 +314,13 @@ static void *pthread(void* arg)
                     databyte[2] = 0xff;
                     puthex (stingdata, databyte, 3);
                     break;
-                case 'i':
+                case 'i':*/
+                    indication = !indication;
                     databyte[0] = 2;
                     printf("direct?\n");
-                    int indication;
+                    /*int indication;
                     scanf("%d",&indication);
-                    
+                    */
                     if(indication)
                     {
                         printf("up\n");
@@ -329,10 +344,23 @@ static void *pthread(void* arg)
                     mosquitto_publish(globalmosq,NULL,globaltopic,strlen(datatosend),datatosend,0,0);
                     printf("%s\n%s\n", globaltopic,datatosend);
                     json_object_put(pragma);
-                    break;
+                    if(indication)
+                    {
+                        upcmdcnt ++;
+                    }
+                    else
+                    {
+                        downcmdcnt ++;
+                    }
+                    /*if(upcmdcnt && downcmdcnt)
+                    {
+                        printf("upcmdcnt = %d, downcmdcnt = %d, upcnt = %d, downcnt = %d, upokpercent = %d\%, downokpercent = %d\%\r\n",upcmdcnt,downcmdcnt,upcnt,downcnt,upcnt * 100 / upcmdcnt,downcnt * 100 / downcmdcnt);
+                    }*/
+                    sleep(5);
+                    /*break;
                 default:
                     break;
-            }
+            }*/
     	}
     }       
 

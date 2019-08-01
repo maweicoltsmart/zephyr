@@ -164,6 +164,7 @@ static void RadioSetTx(void)
                                    GlobalDR, LORA_CODINGRATE,
                                    LORA_PREAMBLE_LENGTH, LORA_FIX_LENGTH_PAYLOAD_ON,
                                    true, false, 0, LORA_IQ_INVERSION_ON, 4000 );
+    printk("%s, %d\r\n",__func__,__LINE__);
 }
 
 static void RadioSetRx(void)
@@ -175,6 +176,7 @@ static void RadioSetRx(void)
                                    LORA_CODINGRATE, 0, LORA_PREAMBLE_LENGTH,
                                    LORA_SYMBOL_TIMEOUT, LORA_FIX_LENGTH_PAYLOAD_ON,
                                    0, true, false, 0, LORA_IQ_INVERSION_ON, true );
+    printk("%s, %d\r\n",__func__,__LINE__);
 }
 
 static void LoRaMacOnRadioTxDone( void )
@@ -187,6 +189,7 @@ static void LoRaMacOnRadioTxDone( void )
         stTmpCfgParm.netState = LORAMAC_JOINED_IDLE;
     }
     k_sem_give(&radio_can_tx_sem);
+    printk("%s, %d\r\n",__func__,__LINE__);
 }
 
 static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr )
@@ -334,7 +337,7 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
                         {
                             struct msg_up_event_type msg_up_event;
                             msg_up_event.event = MSG_UP_PARK_STATUS_REQ_EVENT;
-                            k_msgq_put(&msgup_msgq, &msg_up_event, K_NO_WAIT);
+                            k_msgq_put(&msgup_msgq, &msg_up_event, 5);
                             //RadioSetRx();
                             //Radio.Rx(0);
                             return;
@@ -358,7 +361,7 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
                                 {
                                     struct msg_up_event_type msg_up_event;
                                     msg_up_event.event = MSG_UP_PARK_STATUS_REQ_EVENT;
-                                    k_msgq_put(&msgup_msgq, &msg_up_event, 2);
+                                    k_msgq_put(&msgup_msgq, &msg_up_event, 5);
                                 }
                             }
                             else if(LoRaMacRxPayload[1] == 1)
@@ -371,7 +374,7 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
                                 {
                                     struct msg_up_event_type msg_up_event;
                                     msg_up_event.event = MSG_UP_PARK_STATUS_REQ_EVENT;
-                                    k_msgq_put(&msgup_msgq, &msg_up_event, 2);
+                                    k_msgq_put(&msgup_msgq, &msg_up_event, 5);
                                 }
                             }
                         }
@@ -437,6 +440,7 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
     }
     RadioSetRx();
     Radio.Rx(0);
+    printk("%s, %d\r\n",__func__,__LINE__);
 }
 
 static void LoRaMacOnRadioTxTimeout( void )
@@ -448,18 +452,21 @@ static void LoRaMacOnRadioTxTimeout( void )
         stTmpCfgParm.netState = LORAMAC_JOINED_IDLE;
     }
     k_sem_give(&radio_can_tx_sem);
+    printk("%s, %d\r\n",__func__,__LINE__);
 }
 
 static void LoRaMacOnRadioRxError( void )
 {
     RadioSetRx();
     Radio.Rx(0);
+    printk("%s, %d\r\n",__func__,__LINE__);
 }
 
 static void LoRaMacOnRadioRxTimeout( void )
 {
     RadioSetRx();
     Radio.Rx(0);
+    printk("%s, %d\r\n",__func__,__LINE__);
 }
 
 void LoRaMacOnRadioCadDone( bool channelActivityDetected )
@@ -718,4 +725,4 @@ void LoRaRadioEventCheck( void )
 K_THREAD_DEFINE(lora_mac_id, 600, LoRaMacStateCheck, NULL, NULL, NULL,
         PRIORITY, 0, K_NO_WAIT);
 K_THREAD_DEFINE(lora_radio_id, 600, LoRaRadioEventCheck, NULL, NULL, NULL,
-        PRIORITY, 0, K_NO_WAIT);
+        PRIORITY - 1, 0, K_NO_WAIT);

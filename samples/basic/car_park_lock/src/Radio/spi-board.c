@@ -118,10 +118,12 @@ uint16_t SpiInOut( uint16_t outData )
 
 void SpiCsSet( void )
 {
+    k_busy_wait(5); // 5usec
     gpio_pin_write(spi_cs.gpio_dev, spi_cs.gpio_pin, 1);
 }
 
 void SpiCsReSet( void )
 {
     gpio_pin_write(spi_cs.gpio_dev, spi_cs.gpio_pin, 0);
+    k_busy_wait(5); // 5usec
 }

@@ -277,9 +277,9 @@ void SX1276Reset( void )
     // Enables the TCXO if available on the board design
     SX1276SetBoardTcxo( true );
     gpio_pin_write(gpiosx1276rst, SX1276_RST_PIN, 0);
-    k_sleep(1);
+    k_busy_wait(USEC_PER_MSEC * 1U);
     gpio_pin_write(gpiosx1276rst, SX1276_RST_PIN, 1);
-    k_sleep(6);
+    k_busy_wait(USEC_PER_MSEC * 6U);
 }
 
 uint32_t SX1276GetBoardTcxoWakeupTime( void )

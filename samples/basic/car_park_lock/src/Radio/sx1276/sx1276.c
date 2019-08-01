@@ -283,7 +283,7 @@ bool SX1276IsChannelFree( RadioModems_t modem, uint32_t freq, int16_t rssiThresh
 
     SX1276SetOpMode( RF_OPMODE_RECEIVER );
 
-    k_sleep( 1 );
+    k_busy_wait(USEC_PER_MSEC * 1U);
 
     carrierSenseTime = TimerGetCurrentTime( );
 
@@ -328,7 +328,7 @@ uint32_t SX1276Random( void )
 
     for( i = 0; i < 32; i++ )
     {
-        k_sleep( 1 );
+        k_busy_wait(USEC_PER_MSEC * 1U);
         // Unfiltered RSSI value reading. Only takes the LSB value
         rnd |= ( ( uint32_t )SX1276Read( REG_LR_RSSIWIDEBAND ) & 0x01 ) << i;
     }
@@ -851,7 +851,7 @@ void SX1276Send( uint8_t *buffer, uint8_t size )
             if( ( SX1276Read( REG_OPMODE ) & ~RF_OPMODE_MASK ) == RF_OPMODE_SLEEP )
             {
                 SX1276SetStby( );
-                k_sleep( 1 );
+                k_busy_wait(USEC_PER_MSEC * 1U);
             }
             // Write payload buffer
             SX1276WriteFifo( buffer, size );

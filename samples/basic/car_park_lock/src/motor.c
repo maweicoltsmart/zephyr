@@ -250,7 +250,7 @@ void motor_process(void)
         switch(enLockCurrentStatus)
         {
             case EN_LOCK_CURRENT_STATUS_DOWN:
-                if(enCMD == EN_CMD_UP)
+                if((enCMD == EN_CMD_UP) && (!unLockStatus.sensor1))
                 {
                     motor_going_up();
                     enLockCurrentStatus = EN_LOCK_GOING_UP;
@@ -267,6 +267,12 @@ void motor_process(void)
                 {
                     motor_going_stop();
                     enLockCurrentStatus = EN_LOCK_GOING_UP;
+                }
+                if(enCMD == EN_CMD_DOWN)
+                {
+                    motor_going_down();
+                    enLockCurrentStatus = EN_LOCK_GOING_DOWN;
+                    break;
                 }
                 if(unLockStatus.sensor1)
                 {
@@ -306,6 +312,12 @@ void motor_process(void)
                 {
                     motor_going_stop();
                     enLockCurrentStatus = EN_LOCK_GOING_DOWN;
+                    break;
+                }
+                if((enCMD == EN_CMD_UP) && (!unLockStatus.sensor1))
+                {
+                    motor_going_up();
+                    enLockCurrentStatus = EN_LOCK_GOING_UP;
                     break;
                 }
                 if(motor_key_read() == EN_MOTOR_KEY_DOWN)

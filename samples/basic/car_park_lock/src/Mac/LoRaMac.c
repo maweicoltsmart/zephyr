@@ -114,6 +114,14 @@ static void LoRaMacOnRadioRxError( void );
  */
 static void LoRaMacOnRadioRxTimeout( void );
 static uint8_t channelupdate = 0;
+bool flagRejoin = false;
+bool flagUpdateStatus = true;
+bool flagServerNeedAck = false;
+bool flagLockNeedAck = false;
+uint8_t LockSendRetryCnt = 0;
+
+static uint8_t DataDownFrameCnt = 0;
+static uint8_t DataUpFrameCnt = 0;
 
 static void SetWorkChannel(void)
 {
@@ -333,25 +341,38 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
                                                        DOWN_LINK,
                                                        downLinkCounter,
                                                        LoRaMacRxPayload );
-                        if(LoRaMacRxPayload[0] == 0) // check
+                        if(macHdr.Bits.MType == FRAME_TYPE_DATA_CONFIRMED_DOWN)
                         {
-                            struct msg_up_event_type msg_up_event;
-                            msg_up_event.event = MSG_UP_PARK_STATUS_REQ_EVENT;
-                            k_msgq_put(&msgup_msgq, &msg_up_event, 5);
+                            flagServerNeedAck = true;
+                        }
+                        else
+                        {
+                            flagServerNeedAck = false;
+                        }
+                        DataDownFrameCnt = LoRaMacRxPayload[0];
+                        if((RxfCtrl.Bits.Ack) && (DataDownFrameCnt == DataUpFrameCnt))
+                        {
+                            flagLockNeedAck = false;
+                            LockSendRetryCnt = 0;
+                        }
+                        if(LoRaMacRxPayload[1] == 0) // check
+                        {
+                            flagUpdateStatus = true;
+                            flagLockNeedAck = false;
                             //RadioSetRx();
                             //Radio.Rx(0);
                             return;
                         }
-                        else if(LoRaMacRxPayload[0] == 1) // set destence param
+                        else if(LoRaMacRxPayload[1] == 1) // set destence param
                         {
                             stTmpCfgParm.destencelevel = LoRaMacRxPayload[1] | LoRaMacRxPayload[2] << 8;
                             stTmpCfgParm.geomagnetic_level = LoRaMacRxPayload[3] | LoRaMacRxPayload[4] << 8;
                             cfg_parm_restore();
                         }
-                        else if(LoRaMacRxPayload[0] == 2) // motor cmd
+                        else if(LoRaMacRxPayload[1] == 2) // motor cmd
                         {
-                            printk("%s, %d\r\n",__func__,LoRaMacRxPayload[1]);
-                            if(LoRaMacRxPayload[1] == 0)
+                            printk("%s, %d\r\n",__func__,LoRaMacRxPayload[2]);
+                            if(LoRaMacRxPayload[2] == 0)
                             {
                                 /*struct motor_event_type motor_event;
                                 motor_event.event = MOTOR_CMD_DOWN_EVENT;
@@ -359,12 +380,11 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
                                 enCMD = EN_CMD_DOWN;
                                 if(unLockStatus.motor == 0)
                                 {
-                                    struct msg_up_event_type msg_up_event;
-                                    msg_up_event.event = MSG_UP_PARK_STATUS_REQ_EVENT;
-                                    k_msgq_put(&msgup_msgq, &msg_up_event, 5);
+                                    flagUpdateStatus = true;
+                                    flagLockNeedAck = false;
                                 }
                             }
-                            else if(LoRaMacRxPayload[1] == 1)
+                            else if(LoRaMacRxPayload[2] == 1)
                             {
                                 /*struct motor_event_type motor_event;
                                 motor_event.event = MOTOR_CMD_UP_EVENT;
@@ -372,22 +392,21 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
                                 enCMD = EN_CMD_UP;
                                 if(unLockStatus.motor == 1)
                                 {
-                                    struct msg_up_event_type msg_up_event;
-                                    msg_up_event.event = MSG_UP_PARK_STATUS_REQ_EVENT;
-                                    k_msgq_put(&msgup_msgq, &msg_up_event, 5);
+                                    flagUpdateStatus = true;
+                                    flagLockNeedAck = false;
                                 }
                             }
                         }
-                        else if(LoRaMacRxPayload[0] == 3) // calibration
+                        else if(LoRaMacRxPayload[1] == 3) // calibration
                         {
                             stTmpCfgParm.geomagnetic_init_x = geomagnetic_current_x;
                             stTmpCfgParm.geomagnetic_init_y = geomagnetic_current_y;
                             stTmpCfgParm.geomagnetic_init_z = geomagnetic_current_z;
                             cfg_parm_restore();
                         }
-                        else if(LoRaMacRxPayload[0] == 4) // led mask
+                        else if(LoRaMacRxPayload[1] == 4) // led mask
                         {
-                            stTmpCfgParm.led_mask = LoRaMacRxPayload[1];
+                            stTmpCfgParm.led_mask = LoRaMacRxPayload[2];
                             cfg_parm_restore();
                         }
                         #if 0
@@ -513,6 +532,15 @@ LoRaMacStatus_t SendFrameOnChannel( uint8_t channel,uint8_t *data,uint8_t len,ui
     }*/
     //macHdr.Bits.RFU = CLASS_C;
     fCtrl.Value = 0;
+    if(flagServerNeedAck)
+    {
+        fCtrl.Bits.Ack = true;
+        flagServerNeedAck = false;
+    }
+    else
+    {
+        fCtrl.Bits.Ack = false;
+    }
 
     LoRaMacBuffer[pktHeaderLen++] = macHdr.Value;
     LoRaMacBuffer[pktHeaderLen++] = ( stTmpCfgParm.LoRaMacDevAddr ) & 0xFF;
@@ -627,13 +655,9 @@ LoRaMacStatus_t LoRaMacInitialization( void )
     BoardEnableIrq();
     return LORAMAC_STATUS_OK;
 }
-K_MSGQ_DEFINE(msgup_msgq, sizeof(en_MSG_UP_EVENT), 20, 4);
 
 void LoRaMacStateCheck( void )
 {    
-    struct msg_up_event_type msg_up_event;
-    int ret;
-
     LoRaMacInitialization();
     while(true)
     {
@@ -651,27 +675,77 @@ void LoRaMacStateCheck( void )
                 unLockStatus.motor = 0;
                 unLockStatus.sensor1 = 0;
                 unLockStatus.sensor2 = 0;
-                msg_up_event.event = MSG_UP_LOCK_STATUS_CHANGE_EVENT;
-                k_msgq_put(&msgup_msgq, &msg_up_event, K_NO_WAIT);
-                //k_msgq_put(&msgup_msgq, &msg_up_event, K_NO_WAIT);
+                k_sleep(1000);
+                flagUpdateStatus = true;
+                flagLockNeedAck = true;
                 SetWorkChannel();
                 printk("joined\r\n");
                 stTmpCfgParm.netState = LORAMAC_JOINED_IDLE;
+                
             case LORAMAC_JOINED_IDLE:
+                //printk("%s, %d\r\n",__func__,__LINE__);
+
+                k_sleep(20);
                 k_sem_take(&radio_can_tx_sem, K_FOREVER);
-                ret = k_msgq_get(&msgup_msgq, &msg_up_event, K_FOREVER);
-                if(msg_up_event.event == MSG_UP_PARK_STATUS_REJOIN_EVENT)
+                //printk("%s, %d\r\n",__func__,__LINE__);
+sendnextpkg:
+                if(flagRejoin)
                 {
+                    flagRejoin = false;
                     channelupdate = 0;
+                    k_sem_give(&radio_can_tx_sem);
                     break;
                 }
-                uint8_t temp[5];
-                temp[0] = unLockStatus.motor | (unLockStatus.sensor1 << 1) | (unLockStatus.sensor2 << 2);
-                temp[1] = destensecopy[0] & 0x00ff;
-                temp[2] = (destensecopy[0] >> 8) & 0x00ff;
-                temp[3] = destensecopy[1] & 0x00ff;
-                temp[4] = (destensecopy[1] >> 8) & 0x00ff;
-                SendFrameOnChannel( 0,temp,5,false,1);
+                //printk("%s, %d\r\n",__func__,__LINE__);
+                if((flagUpdateStatus) || (flagServerNeedAck) || (flagLockNeedAck))
+                {
+                    uint8_t temp[6];
+                    bool confirm = false;
+                    printk("%s, %d\r\n",__func__,__LINE__);
+                    flagUpdateStatus = false;
+                    if(flagServerNeedAck)
+                    {
+                        DataUpFrameCnt = DataDownFrameCnt;
+                    }
+                    else
+                    {
+                        DataUpFrameCnt++;
+                    }
+                    temp[0] = DataUpFrameCnt;
+                    temp[1] = unLockStatus.motor | (unLockStatus.sensor1 << 1) | (unLockStatus.sensor2 << 2);
+                    temp[2] = destensecopy[0] & 0x00ff;
+                    temp[3] = (destensecopy[0] >> 8) & 0x00ff;
+                    temp[4] = destensecopy[1] & 0x00ff;
+                    temp[5] = (destensecopy[1] >> 8) & 0x00ff;
+                    if(flagLockNeedAck)
+                    {
+                        confirm = true;
+                    }
+                    else
+                    {
+                        confirm = false;
+                    }
+                    
+                    SendFrameOnChannel( 0,temp,6,confirm,1);
+                    LockSendRetryCnt ++;
+                    if(flagLockNeedAck)
+                    {
+                        if(LockSendRetryCnt < 20)
+                        {
+                            k_sleep(randr(0,1000) + 4000);
+                        }
+                        else
+                        {
+                            LockSendRetryCnt = 0;
+                            flagLockNeedAck = 0;
+                        }
+                    }
+                }
+                else
+                {
+                    k_sleep(20);
+                    goto sendnextpkg;
+                }
                 break;
             case LORAMAC_TX_ING:
                 break;

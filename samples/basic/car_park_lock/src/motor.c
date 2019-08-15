@@ -183,9 +183,7 @@ bool rejoin_key_detect(void)
         }
         while(val == 0);
         cfg_parm_factory_reset();
-        struct msg_up_event_type msg_up_event;
-        msg_up_event.event = MSG_UP_PARK_STATUS_REJOIN_EVENT;
-        k_msgq_put(&msgup_msgq, &msg_up_event, 2);
+        flagRejoin = true;
         printk("Rejoin again\r\n");
         return true;
     }
@@ -245,7 +243,7 @@ void motor_process(void)
     
     while(1)
     {
-        k_sleep(20);
+        k_sleep(50);
         rejoin_key_detect();
         switch(enLockCurrentStatus)
         {
@@ -263,10 +261,12 @@ void motor_process(void)
                 }
                 break;
             case EN_LOCK_GOING_UP:
+                motor_going_up();
                 if(current_detect())
                 {
                     motor_going_stop();
                     enLockCurrentStatus = EN_LOCK_GOING_UP;
+                    k_sleep(1000);
                 }
                 if(enCMD == EN_CMD_DOWN)
                 {
@@ -287,9 +287,8 @@ void motor_process(void)
                     if(stTmpCfgParm.netState >= LORAMAC_JOINED)
                     {
                         printk("send to server\r\n");
-                        struct msg_up_event_type msg_up_event;
-                        msg_up_event.event = MSG_UP_LOCK_STATUS_CHANGE_EVENT;
-                        k_msgq_put(&msgup_msgq, &msg_up_event, 2);
+                        flagUpdateStatus = true;
+                        flagLockNeedAck = false;
                     }
                     break;
                 }
@@ -308,11 +307,12 @@ void motor_process(void)
                 }
                 break;
             case EN_LOCK_GOING_DOWN:
+                motor_going_down();
                 if(current_detect())
                 {
                     motor_going_stop();
                     enLockCurrentStatus = EN_LOCK_GOING_DOWN;
-                    break;
+                    k_sleep(1000);
                 }
                 if((enCMD == EN_CMD_UP) && (!unLockStatus.sensor1))
                 {
@@ -327,9 +327,8 @@ void motor_process(void)
                     if(stTmpCfgParm.netState >= LORAMAC_JOINED)
                     {
                         printk("send to server\r\n");
-                        struct msg_up_event_type msg_up_event;
-                        msg_up_event.event = MSG_UP_LOCK_STATUS_CHANGE_EVENT;
-                        k_msgq_put(&msgup_msgq, &msg_up_event, 2);
+                        flagUpdateStatus = true;
+                        flagLockNeedAck = false;
                     }
                     break;
                 }
@@ -679,9 +678,8 @@ void motor_cmd_process(void)
                             if((sensor1lastvalue != unLockStatus.sensor1) && (sensor1truecnt > 5))
                             {
                                 sensor1lastvalue = unLockStatus.sensor1;
-                                struct msg_up_event_type msg_up_event;
-                                msg_up_event.event = MSG_UP_PARK_STATUS_CHANGE_EVENT;
-                                k_msgq_put(&msgup_msgq, &msg_up_event, K_NO_WAIT);
+                                flagUpdateStatus = true;
+                                flagLockNeedAck = true;
                                 printk("car detect destense = %d\r\n",destense);
                             }
                         }
@@ -693,9 +691,8 @@ void motor_cmd_process(void)
                             if((sensor1lastvalue != unLockStatus.sensor1) && (sensor1falsecnt > 5))
                             {
                                 sensor1lastvalue = unLockStatus.sensor1;
-                                struct msg_up_event_type msg_up_event;
-                                msg_up_event.event = MSG_UP_PARK_STATUS_CHANGE_EVENT;
-                                k_msgq_put(&msgup_msgq, &msg_up_event, K_NO_WAIT);
+                                flagUpdateStatus = true;
+                                flagLockNeedAck = true;
                                 printk("car not detect destense = %d\r\n",destense);
                             }
                         }

@@ -252,7 +252,7 @@ void my_message_callback(struct mosquitto *mosq, void *userdata, const struct mo
         {
             databyte[0] = DataUpFrameCnt;
             databyte[1] = 2;
-            databyte[2] = unLockStatus.value & 0x01;
+            databyte[2] = 0;
             uint8_t stingdata[256 * 2] = {0};
 
             puthex (stingdata, databyte, 3);

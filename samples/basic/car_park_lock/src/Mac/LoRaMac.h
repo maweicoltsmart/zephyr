@@ -1850,6 +1850,7 @@ extern bool flagRejoin;
 extern bool flagUpdateStatus;
 extern bool flagServerNeedAck;
 extern bool flagLockNeedAck;
+extern uint8_t LockSendRetryCnt;
 /*!
  * Automatically add the Region.h file at the end of LoRaMac.h file.
  * This is required because Region.h uses definitions from LoRaMac.h

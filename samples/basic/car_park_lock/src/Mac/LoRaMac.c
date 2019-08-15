@@ -196,6 +196,7 @@ static void LoRaMacOnRadioTxDone( void )
     {
         stTmpCfgParm.netState = LORAMAC_JOINED_IDLE;
     }
+    LockSendRetryCnt ++;
     k_sem_give(&radio_can_tx_sem);
     printk("%s, %d\r\n",__func__,__LINE__);
 }
@@ -350,7 +351,7 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
                             flagServerNeedAck = false;
                         }
                         DataDownFrameCnt = LoRaMacRxPayload[0];
-                        if((RxfCtrl.Bits.Ack) && (DataDownFrameCnt == DataUpFrameCnt))
+                        if((RxfCtrl.Bits.Ack) && (DataDownFrameCnt == DataUpFrameCnt) && (LockSendRetryCnt > 0))
                         {
                             flagLockNeedAck = false;
                             LockSendRetryCnt = 0;
@@ -358,7 +359,7 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
                         if(LoRaMacRxPayload[1] == 0) // check
                         {
                             flagUpdateStatus = true;
-                            flagLockNeedAck = false;
+                            //flagLockNeedAck = false;
                             //RadioSetRx();
                             //Radio.Rx(0);
                             return;
@@ -381,7 +382,8 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
                                 if(unLockStatus.motor == 0)
                                 {
                                     flagUpdateStatus = true;
-                                    flagLockNeedAck = false;
+                                    //flagLockNeedAck = false;
+                                    LockSendRetryCnt = 0;
                                 }
                             }
                             else if(LoRaMacRxPayload[2] == 1)
@@ -393,7 +395,8 @@ static void LoRaMacOnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi,
                                 if(unLockStatus.motor == 1)
                                 {
                                     flagUpdateStatus = true;
-                                    flagLockNeedAck = false;
+                                    //flagLockNeedAck = false;
+                                    LockSendRetryCnt = 0;
                                 }
                             }
                         }
@@ -727,7 +730,7 @@ sendnextpkg:
                     }
                     
                     SendFrameOnChannel( 0,temp,6,confirm,1);
-                    LockSendRetryCnt ++;
+                    
                     if(flagLockNeedAck)
                     {
                         if(LockSendRetryCnt < 20)

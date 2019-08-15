@@ -288,7 +288,7 @@ void motor_process(void)
                     {
                         printk("send to server\r\n");
                         flagUpdateStatus = true;
-                        flagLockNeedAck = false;
+                        //flagLockNeedAck = false;
                     }
                     break;
                 }
@@ -328,7 +328,7 @@ void motor_process(void)
                     {
                         printk("send to server\r\n");
                         flagUpdateStatus = true;
-                        flagLockNeedAck = false;
+                        //flagLockNeedAck = false;
                     }
                     break;
                 }
@@ -680,6 +680,7 @@ void motor_cmd_process(void)
                                 sensor1lastvalue = unLockStatus.sensor1;
                                 flagUpdateStatus = true;
                                 flagLockNeedAck = true;
+                                LockSendRetryCnt = 0;
                                 printk("car detect destense = %d\r\n",destense);
                             }
                         }
@@ -693,6 +694,7 @@ void motor_cmd_process(void)
                                 sensor1lastvalue = unLockStatus.sensor1;
                                 flagUpdateStatus = true;
                                 flagLockNeedAck = true;
+                                LockSendRetryCnt = 0;
                                 printk("car not detect destense = %d\r\n",destense);
                             }
                         }

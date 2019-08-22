@@ -115,7 +115,7 @@ void TimerInit( TimerEvent_t *obj, void ( *callback )(struct k_timer *) )
 
 void TimerStart( TimerEvent_t *obj )
 {
-    k_timer_start(obj,K_MSEC(tempvalue),K_MSEC(tempvalue));
+    k_timer_start(obj,K_MSEC(tempvalue),0);
 }
 
 void TimerStop( TimerEvent_t *obj )

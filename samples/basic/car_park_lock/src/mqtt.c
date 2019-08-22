@@ -205,15 +205,15 @@ void my_message_callback(struct mosquitto *mosq, void *userdata, const struct mo
 			strcat(topic,stServerNodeDatabase.strDevEUI);
 			//printf("topic = %s\r\n",topic);
             //printf("data = %s\r\n",datatosend);
-            uint8_t tempdata[6];
+            uint8_t tempdata[5];
             int16_t sensor1,sensor2;
             uint8_t lockstatus;
             printf("%s\n",echodata );
-            for(uint8_t myloop = 0;myloop < 12;myloop ++)
+            for(uint8_t myloop = 0;myloop < 10;myloop ++)
             {
                 echodata[myloop] = tolower(echodata[myloop]);
             }
-            gethex (tempdata, echodata, 12);
+            gethex (tempdata, echodata, 10);
             //StringToHex(echodata, tempdata, 5);
 
             printf("%02X\n", tempdata[0]);
@@ -221,10 +221,10 @@ void my_message_callback(struct mosquitto *mosq, void *userdata, const struct mo
             printf("%02X\n", tempdata[2]);
             printf("%02X\n", tempdata[3]);
             printf("%02X\n", tempdata[4]);
-            printf("%02X\n", tempdata[5]);
+            //printf("%02X\n", tempdata[5]);
             un_LockStatus unLockStatus;
-            DataUpFrameCnt = tempdata[0];
-            unLockStatus.value = tempdata[1];
+            //DataUpFrameCnt = tempdata[0];
+            unLockStatus.value = tempdata[0];
             if(unLockStatus.value & 0x01)
             {
                 upcnt ++;
@@ -237,8 +237,8 @@ void my_message_callback(struct mosquitto *mosq, void *userdata, const struct mo
             {
                 printf("upcmdcnt = %d, downcmdcnt = %d, upcnt = %d, downcnt = %d, upokpercent = %d\%, downokpercent = %d\%\r\n",upcmdcnt,downcmdcnt,upcnt,downcnt,upcnt * 100 / upcmdcnt,downcnt * 100 / downcmdcnt);
             }
-            sensor1 =  tempdata[2] | (tempdata[3] << 8);
-            sensor2 =  tempdata[4] | (tempdata[5] << 8);
+            sensor1 =  tempdata[1] | (tempdata[2] << 8);
+            sensor2 =  tempdata[3] | (tempdata[4] << 8);
             printf("\rmotor status = %d, sensor1 status = %d, sensor2 status = %d; sensor1 = %d, sensor2 = %d\r\n", unLockStatus.motor,unLockStatus.sensor1,unLockStatus.sensor2,sensor1,sensor2);
 	//while(1)
 	{
@@ -248,7 +248,7 @@ void my_message_callback(struct mosquitto *mosq, void *userdata, const struct mo
 		globalmosq = mosq;
         uint8_t databyte[3];
         //indication = !indication;
-        if(isconfirmrequest)
+        /*if(isconfirmrequest)
         {
             databyte[0] = DataUpFrameCnt;
             databyte[1] = 2;
@@ -267,12 +267,12 @@ void my_message_callback(struct mosquitto *mosq, void *userdata, const struct mo
             strcpy(datatosend,json_object_to_json_string(pragma));
             mosquitto_publish(globalmosq,NULL,globaltopic,strlen(datatosend),datatosend,0,0);
             printf("\r\n%s\r\n%s\r\n", globaltopic,datatosend);
-        }
+        }*/
         //mosquitto_publish(mosq,NULL,topic,strlen(datatosend)+1,datatosend,0,0);
 		//sleep(2);
 	}
 			//mosquitto_publish(mosq,NULL,topic,strlen(datatosend)+1,sendlen,0,0);
-	        json_object_put(pragma);
+	        //json_object_put(pragma);
             //memset(buffer,0,1024 * 100);
         }
     }else{
@@ -321,12 +321,13 @@ static void *pthread(void* arg)
     uint8_t stingdata[7] = {0};
     uint8_t cmd;
     uint8_t datatosend[1024] = {0};
-    int indication;
+    int indication = 0;
     while(1)
     {
     	if(rx1stpkgflag)
     	{
-            scanf("%c",&cmd);
+            //scanf("%c",&cmd);
+            cmd = 'i';
             memset(stingdata,0,sizeof(stingdata));
             switch(cmd)
             {
@@ -342,32 +343,32 @@ static void *pthread(void* arg)
                     break;
                 case 'i':
                     
-                    //indication = !indication;
-                    if(isconfirmrequest)
+                    indication = !indication;
+                    /*if(isconfirmrequest)
                     {
                         DataDownFrameCnt = DataUpFrameCnt;
                     }
                     else
                     {
                         DataDownFrameCnt ++;
-                    }
-                    databyte[0] = DataDownFrameCnt;
-                    databyte[1] = 2;
+                    }*/
+                    //databyte[0] = DataDownFrameCnt;
+                    databyte[0] = 2;
                     printf("direct?\n");
-                    int indication;
-                    scanf("%d",&indication);
+                    
+                    //scanf("%d",&indication);
                     
                     if(indication)
                     {
                         printf("up\n");
-                        databyte[2] = 1;
+                        databyte[1] = 1;
                     }
                     else
                     {
                         printf("down\n");
-                        databyte[2] = 0;
+                        databyte[1] = 0;
                     }
-                    puthex (stingdata, databyte, 3);
+                    puthex (stingdata, databyte, 2);
                     pragma = json_object_new_object();
                     json_object_object_add(pragma,"NetAddr",json_object_new_int(stServerNodeDatabase.iDevAddr));
                     json_object_object_add(pragma,"Port",json_object_new_int(1));
@@ -392,7 +393,7 @@ static void *pthread(void* arg)
                     {
                         printf("upcmdcnt = %d, downcmdcnt = %d, upcnt = %d, downcnt = %d, upokpercent = %d\%, downokpercent = %d\%\r\n",upcmdcnt,downcmdcnt,upcnt,downcnt,upcnt * 100 / upcmdcnt,downcnt * 100 / downcmdcnt);
                     }*/
-                    //sleep(7);
+                    sleep(7);
                     break;
                 default:
                     break;

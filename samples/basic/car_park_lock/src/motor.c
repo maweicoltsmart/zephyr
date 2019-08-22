@@ -81,7 +81,7 @@ void motor_going_down(void)
     gpio_pin_write(gpio_dev_pwm, PIN_MOTOR_PWM, 1); // IN2
     gpio_pin_write(gpio_dev_brak, PIN_MOTOR_BRAK, 1); // EN
     gpio_pin_write(gpio_dev_dir, PIN_MOTOR_DIR, 0); // IN1
-    printk("motor going down\r\n");
+    //printk("motor going down\r\n");
 }
 
 void motor_going_up(void)
@@ -89,7 +89,7 @@ void motor_going_up(void)
     gpio_pin_write(gpio_dev_pwm, PIN_MOTOR_PWM, 0); // IN2
     gpio_pin_write(gpio_dev_brak, PIN_MOTOR_BRAK, 1); // EN
     gpio_pin_write(gpio_dev_dir, PIN_MOTOR_DIR, 1); // IN1
-    printk("motor going up\r\n");
+    //printk("motor going up\r\n");
 }
 
 void motor_going_stop(void)
@@ -679,7 +679,7 @@ void motor_cmd_process(void)
                             {
                                 sensor1lastvalue = unLockStatus.sensor1;
                                 flagUpdateStatus = true;
-                                flagLockNeedAck = true;
+                                flagLockNeedAck = false;
                                 LockSendRetryCnt = 0;
                                 printk("car detect destense = %d\r\n",destense);
                             }
@@ -693,7 +693,7 @@ void motor_cmd_process(void)
                             {
                                 sensor1lastvalue = unLockStatus.sensor1;
                                 flagUpdateStatus = true;
-                                flagLockNeedAck = true;
+                                flagLockNeedAck = false;
                                 LockSendRetryCnt = 0;
                                 printk("car not detect destense = %d\r\n",destense);
                             }

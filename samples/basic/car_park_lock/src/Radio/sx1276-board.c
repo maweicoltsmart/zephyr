@@ -130,20 +130,29 @@ void sx1276_dio_irq(struct device *gpiob, struct gpio_callback *cb,
             u32_t pins)
 {
     struct radio_event_type radio_event;
-    //printk("%s, %d\r\n",__func__,pins);
-    if(BIT(SX1276_DIO_0_PIN) & pins)
+    u32_t val1 = 0U;
+    u32_t val2 = 0U;
+    u32_t val3 = 0U;
+
+    gpio_pin_read(gpiob, SX1276_DIO_0_PIN, &val1);
+    gpio_pin_read(gpiob, SX1276_DIO_1_PIN, &val2);
+    gpio_pin_read(gpiob, SX1276_DIO_3_PIN, &val3);
+    if(val1)
+    //if(BIT(SX1276_DIO_0_PIN) & pins)
     {
         radio_event.event = SX1276_DIO_0_IRQ_EVENT;
     }
-    if(BIT(SX1276_DIO_1_PIN) & pins)
+    if(val2)
+    //if(BIT(SX1276_DIO_1_PIN) & pins)
     {
         radio_event.event = SX1276_DIO_1_IRQ_EVENT;
     }
-    if(BIT(SX1276_DIO_2_PIN) & pins)
+    /*if(BIT(SX1276_DIO_2_PIN) & pins)
     {
         radio_event.event = SX1276_DIO_2_IRQ_EVENT;
-    }
-    if(BIT(SX1276_DIO_3_PIN) & pins)
+    }*/
+    if(val3)
+    //if(BIT(SX1276_DIO_3_PIN) & pins)
     {
         radio_event.event = SX1276_DIO_3_IRQ_EVENT;
     }

@@ -1,35 +1,26 @@
----
 title: Atmel SAM Family AFEC
-version: 0.1
 
 description: >
     This binding gives a base representation of the Atmel SAM AFEC
 
-inherits:
-    !include adc.yaml
+compatible: "atmel,sam-afec"
+
+include: adc-controller.yaml
 
 properties:
-    compatible:
-      type: string
-      category: required
-      description: compatible strings
-      constraint: "atmel,sam-afec"
-
     reg:
-      type: array
-      description: mmio register space
-      generation: define
-      category: required
+      required: true
 
     interrupts:
-      type: array
-      category: required
-      description: required interrupts
-      generation: define
+      required: true
 
     peripheral-id:
       type: int
       description: peripheral ID
-      generation: define
-      category: required
-...
+      required: true
+
+    "#io-channel-cells":
+      const: 1
+
+io-channel-cells:
+    - input

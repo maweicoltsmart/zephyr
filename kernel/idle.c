@@ -8,15 +8,22 @@
 #include <kernel_structs.h>
 #include <toolchain.h>
 #include <linker/sections.h>
-#include <drivers/system_timer.h>
+#include <drivers/timer/system_timer.h>
 #include <wait_q.h>
-#include <power.h>
+#include <power/power.h>
 #include <stdbool.h>
 
 #ifdef CONFIG_TICKLESS_IDLE_THRESH
 #define IDLE_THRESH CONFIG_TICKLESS_IDLE_THRESH
 #else
 #define IDLE_THRESH 1
+#endif
+
+/* Fallback idle spin loop for SMP platforms without a working IPI */
+#if (defined(CONFIG_SMP) && !defined(CONFIG_SCHED_IPI_SUPPORTED))
+#define SMP_FALLBACK 1
+#else
+#define SMP_FALLBACK 0
 #endif
 
 #ifdef CONFIG_SYS_POWER_MANAGEMENT
@@ -26,6 +33,10 @@
  */
 unsigned char sys_pm_idle_exit_notify;
 
+
+/* LCOV_EXCL_START
+ * These are almost certainly overidden and in any event do nothing
+ */
 #if defined(CONFIG_SYS_POWER_SLEEP_STATES)
 void __attribute__((weak)) _sys_resume(void)
 {
@@ -37,6 +48,7 @@ void __attribute__((weak)) _sys_resume_from_deep_sleep(void)
 {
 }
 #endif
+/* LCOV_EXCL_STOP */
 
 #endif /* CONFIG_SYS_POWER_MANAGEMENT */
 
@@ -51,7 +63,7 @@ void __attribute__((weak)) _sys_resume_from_deep_sleep(void)
  *
  * @return N/A
  */
-#ifndef CONFIG_SMP
+#if !SMP_FALLBACK
 static void set_kernel_idle_time_in_ticks(s32_t ticks)
 {
 #ifdef CONFIG_SYS_POWER_MANAGEMENT
@@ -135,26 +147,19 @@ void idle(void *unused1, void *unused2, void *unused3)
 #ifdef CONFIG_BOOT_TIME_MEASUREMENT
 	/* record timestamp when idling begins */
 
-	extern u64_t __idle_time_stamp;
+	extern u32_t z_timestamp_idle;
 
-	__idle_time_stamp = (u64_t)k_cycle_get_32();
+	z_timestamp_idle = k_cycle_get_32();
 #endif
 
-#ifdef CONFIG_SMP
-	/* Simplified idle for SMP CPUs pending driver support.  The
-	 * busy waiting is needed to prevent lock contention.  Long
-	 * term we need to wake up idle CPUs with an IPI.
-	 */
 	while (true) {
+#if SMP_FALLBACK
 		k_busy_wait(100);
 		k_yield();
-	}
 #else
-	for (;;) {
-		(void)irq_lock();
+		(void)z_arch_irq_lock();
 		sys_power_save_idle();
-
 		IDLE_YIELD_IF_COOP();
-	}
 #endif
+	}
 }

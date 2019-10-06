@@ -1,43 +1,18 @@
----
 title: STM32 TIMERS
-version: 0.1
 
 description: >
     This binding gives a base representation of the STM32 TIMERS
 
+compatible: "st,stm32-timers"
+
+include: base.yaml
+
 properties:
-    "#address-cells":
-      type: int
-      category: required
-      description: should be 1.
-    "#size-cells":
-      type: int
-      category: required
-      description: should be 0.
-
-    compatible:
-      type: string
-      category: required
-      description: compatible strings
-      constraint: "st,stm32-timers"
-      generation: define
-
     label:
-      type: string
-      category: required
-      description: Human readable string describing the device (used by Zephyr for API name)
-      generation: define
+      required: true
 
     reg:
-      type: array
-      description: mmio register space
-      generation: define
-      category: required
+      required: true
 
     clocks:
-      type: array
-      category: required
-      description: Clock gate information
-      generation: define
-
-...
+      required: true

@@ -22,11 +22,11 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 #include <net/net_if.h>
 #include <net/net_pkt.h>
 
-#include <misc/byteorder.h>
+#include <sys/byteorder.h>
 #include <string.h>
 #include <random/rand32.h>
 
-#include <gpio.h>
+#include <drivers/gpio.h>
 
 #ifdef CONFIG_IEEE802154_CC2520_CRYPTO
 
@@ -839,7 +839,7 @@ static int cc2520_tx(struct device *dev,
 			goto error;
 		}
 
-		k_sem_take(&cc2520->tx_sync, 10);
+		k_sem_take(&cc2520->tx_sync, K_MSEC(10));
 
 		retry--;
 		status = verify_tx_done(cc2520);
@@ -977,7 +977,7 @@ static inline int configure_spi(struct device *dev)
 {
 	struct cc2520_context *cc2520 = dev->driver_data;
 
-	cc2520->spi = device_get_binding(DT_TI_CC2520_0_BUS_NAME);
+	cc2520->spi = device_get_binding(DT_INST_0_TI_CC2520_BUS_NAME);
 	if (!cc2520->spi) {
 		LOG_ERR("Unable to get SPI device");
 		return -ENODEV;
@@ -985,25 +985,25 @@ static inline int configure_spi(struct device *dev)
 
 #if defined(CONFIG_IEEE802154_CC2520_GPIO_SPI_CS)
 	cs_ctrl.gpio_dev = device_get_binding(
-		DT_TI_CC2520_0_CS_GPIO_CONTROLLER);
+		DT_INST_0_TI_CC2520_CS_GPIOS_CONTROLLER);
 	if (!cs_ctrl.gpio_dev) {
 		LOG_ERR("Unable to get GPIO SPI CS device");
 		return -ENODEV;
 	}
 
-	cs_ctrl.gpio_pin = DT_TI_CC2520_0_CS_GPIO_PIN;
+	cs_ctrl.gpio_pin = DT_INST_0_TI_CC2520_CS_GPIOS_PIN;
 	cs_ctrl.delay = 0U;
 
 	cc2520->spi_cfg.cs = &cs_ctrl;
 
 	LOG_DBG("SPI GPIO CS configured on %s:%u",
-		    DT_TI_CC2520_0_CS_GPIO_CONTROLLER,
-		    DT_TI_CC2520_0_CS_GPIO_PIN);
+		    DT_INST_0_TI_CC2520_CS_GPIOS_CONTROLLER,
+		    DT_INST_0_TI_CC2520_CS_GPIOS_PIN);
 #endif /* CONFIG_IEEE802154_CC2520_GPIO_SPI_CS */
 
-	cc2520->spi_cfg.frequency = DT_TI_CC2520_0_SPI_MAX_FREQUENCY;
+	cc2520->spi_cfg.frequency = DT_INST_0_TI_CC2520_SPI_MAX_FREQUENCY;
 	cc2520->spi_cfg.operation = SPI_WORD_SET(8);
-	cc2520->spi_cfg.slave = DT_TI_CC2520_0_BASE_ADDRESS;
+	cc2520->spi_cfg.slave = DT_INST_0_TI_CC2520_BASE_ADDRESS;
 
 	return 0;
 }
@@ -1040,7 +1040,7 @@ static int cc2520_init(struct device *dev)
 	k_thread_create(&cc2520->cc2520_rx_thread, cc2520->cc2520_rx_stack,
 			CONFIG_IEEE802154_CC2520_RX_STACK_SIZE,
 			(k_thread_entry_t)cc2520_rx,
-			dev, NULL, NULL, K_PRIO_COOP(2), 0, 0);
+			dev, NULL, NULL, K_PRIO_COOP(2), 0, K_NO_WAIT);
 
 	LOG_INF("CC2520 initialized");
 

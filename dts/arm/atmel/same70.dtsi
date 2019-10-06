@@ -14,15 +14,22 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 
-		cpu@0 {
+		cpu0: cpu@0 {
 			device_type = "cpu";
 			compatible = "arm,cortex-m7";
 			reg = <0>;
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			mpu: mpu@e000ed90 {
+				compatible = "arm,armv7m-mpu";
+				reg = <0xe000ed90 0x40>;
+				arm,num-mpu-regions = <16>;
+			};
 		};
 	};
 
 	sram0: memory@20400000 {
-		device_type = "memory";
 		compatible = "mmio-sram";
 	};
 
@@ -193,6 +200,7 @@
 			peripheral-id = <29>;
 			status = "disabled";
 			label = "ADC_0";
+			#io-channel-cells = <1>;
 		};
 
 		adc1: adc@40064000 {
@@ -202,6 +210,7 @@
 			peripheral-id = <40>;
 			status = "disabled";
 			label = "ADC_1";
+			#io-channel-cells = <1>;
 		};
 
 		porta: gpio@400e0e00 {
@@ -297,7 +306,7 @@
 			reg = <0x40070000 0x4000>;
 			interrupts = <57 0>;
 			peripheral-id = <57>;
-			status = "ok";
+			status = "okay";
 			label = "TRNG";
 		};
 	};

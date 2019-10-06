@@ -154,7 +154,7 @@ void regression_thread(void *arg1, void *arg2, void *arg3)
 	ARG_UNUSED(arg2);
 	ARG_UNUSED(arg3);
 
-	k_sem_give(&ALT_SEM);   /* Activate alternate_tast() */
+	k_sem_give(&ALT_SEM);   /* Activate alternate_thread() */
 
 	ncalls = critical_loop(ncalls);
 
@@ -223,7 +223,7 @@ void test_critical(void)
 void test_main(void)
 {
 	ztest_test_suite(kernel_critical,
-			 ztest_unit_test(test_critical)
+			 ztest_1cpu_unit_test(test_critical)
 			 );
 	ztest_run_test_suite(kernel_critical);
 }

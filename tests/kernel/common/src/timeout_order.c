@@ -5,7 +5,7 @@
  */
 
 #include <kernel.h>
-#include <misc/printk.h>
+#include <sys/printk.h>
 #include <ztest.h>
 
 #define NUM_TIMEOUTS 3
@@ -55,7 +55,8 @@ void test_timeout_order(void)
 
 	for (ii = 0; ii < NUM_TIMEOUTS; ii++) {
 		(void)k_thread_create(&threads[ii], stacks[ii], STACKSIZE,
-				      thread, (void *)ii, 0, 0, prio, 0, 0);
+				      thread, INT_TO_POINTER(ii), 0, 0,
+				      prio, 0, 0);
 		k_timer_init(&timer[ii], 0, 0);
 		k_sem_init(&sem[ii], 0, 1);
 		results[ii] = -1;
@@ -65,15 +66,14 @@ void test_timeout_order(void)
 	u32_t uptime = k_uptime_get_32();
 
 	/* sync on tick */
-	while (uptime == k_uptime_get_32())
+	while (uptime == k_uptime_get_32()) {
 #if defined(CONFIG_ARCH_POSIX)
 		k_busy_wait(50);
-#else
-		;
 #endif
+	}
 
 	for (ii = 0; ii < NUM_TIMEOUTS; ii++) {
-		k_timer_start(&timer[ii], 100, 0);
+		k_timer_start(&timer[ii], K_MSEC(100), K_NO_WAIT);
 	}
 
 	struct k_poll_event poll_events[NUM_TIMEOUTS];
@@ -86,7 +86,7 @@ void test_timeout_order(void)
 	/* drop prio to get all poll events together */
 	k_thread_priority_set(k_current_get(), prio + 1);
 
-	zassert_equal(k_poll(poll_events, NUM_TIMEOUTS, 2000), 0, "");
+	zassert_equal(k_poll(poll_events, NUM_TIMEOUTS, K_MSEC(2000)), 0, "");
 
 	k_thread_priority_set(k_current_get(), prio - 1);
 

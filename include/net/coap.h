@@ -25,7 +25,7 @@
 #include <stdbool.h>
 #include <net/net_ip.h>
 
-#include <misc/slist.h>
+#include <sys/slist.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -109,7 +109,7 @@ enum coap_msgtype {
 	COAP_TYPE_RESET = 3
 };
 
-#define coap_make_response_code(clas, det) ((clas << 5) | (det))
+#define coap_make_response_code(class, det) ((class << 5) | (det))
 
 /**
  * @brief Set of response codes available for a response packet.
@@ -357,12 +357,7 @@ u8_t *coap_next_token(void);
  *
  * @return a new message id
  */
-static inline u16_t coap_next_id(void)
-{
-	static u16_t message_id;
-
-	return ++message_id;
-}
+u16_t coap_next_id(void);
 
 /**
  * @brief Return the values associated with the option of value @a

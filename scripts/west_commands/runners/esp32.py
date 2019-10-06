@@ -6,9 +6,9 @@
 
 from os import path
 
-from west import log
-
 from runners.core import ZephyrBinaryRunner, RunnerCaps
+
+import sys
 
 
 class Esp32BinaryRunner(ZephyrBinaryRunner):
@@ -78,6 +78,7 @@ class Esp32BinaryRunner(ZephyrBinaryRunner):
             partition_table_bin=args.esp_flash_partition_table)
 
     def do_run(self, command, **kwargs):
+        self.require(self.espidf)
         bin_name = path.splitext(self.elf)[0] + path.extsep + 'bin'
         cmd_convert = [self.espidf, '--chip', 'esp32', 'elf2image', self.elf]
         cmd_flash = [self.espidf, '--chip', 'esp32', '--port', self.device,
@@ -87,6 +88,11 @@ class Esp32BinaryRunner(ZephyrBinaryRunner):
                      '--flash_freq', self.flash_freq,
                      '--flash_size', self.flash_size]
 
+        # Execute Python interpreter if calling a Python script
+        if self.espidf.lower().endswith(".py") and sys.executable:
+            cmd_convert.insert(0, sys.executable)
+            cmd_flash.insert(0, sys.executable)
+
         if self.bootloader_bin:
             cmd_flash.extend(['0x1000', self.bootloader_bin])
             cmd_flash.extend(['0x8000', self.partition_table_bin])
@@ -94,8 +100,9 @@ class Esp32BinaryRunner(ZephyrBinaryRunner):
         else:
             cmd_flash.extend(['0x1000', bin_name])
 
-        log.inf("Converting ELF to BIN")
+        self.logger.info("Converting ELF to BIN")
         self.check_call(cmd_convert)
 
-        log.inf("Flashing ESP32 on {} ({}bps)".format(self.device, self.baud))
+        self.logger.info("Flashing ESP32 on {} ({}bps)".
+                         format(self.device, self.baud))
         self.check_call(cmd_flash)

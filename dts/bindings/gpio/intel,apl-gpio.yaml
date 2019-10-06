@@ -1,43 +1,28 @@
-#
 # Copyright (c) 2018-2019 Intel Corporation
-#
 # SPDX-License-Identifier: Apache-2.0
-#
----
+
 title: Intel Apollo Lake GPIO controller
-version: 0.1
 
 description: >
     This is a representation of the Intel Apollo Lake GPIO node
 
-properties:
-    compatible:
-      type: string
-      category: required
-      description: compatible strings
-      constraint: "intel,apl-gpio"
-      generation: define
+compatible: "intel,apl-gpio"
 
+include: [gpio-controller.yaml, base.yaml]
+
+properties:
     reg:
-      type: int
-      description: mmio register space
-      generation: define
-      category: required
+      required: true
 
     label:
-      type: string
-      category: required
-      description: Human readable string describing the device (used by Zephyr for API name)
-      generation: define
+      required: true
 
     interrupts:
-      type: int
-      generation: define
-      category: required
+      required: true
 
-cell_string: GPIO
+    "#gpio-cells":
+      const: 2
 
-"#cells":
+gpio-cells:
   - pin
   - flags
-...

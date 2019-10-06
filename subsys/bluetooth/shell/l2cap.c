@@ -15,7 +15,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-#include <misc/byteorder.h>
+#include <sys/byteorder.h>
 #include <zephyr.h>
 
 #include <settings/settings.h>
@@ -116,6 +116,16 @@ static int l2cap_recv(struct bt_l2cap_chan *chan, struct net_buf *buf)
 	return 0;
 }
 
+static void l2cap_sent(struct bt_l2cap_chan *chan)
+{
+	shell_print(ctx_shell, "Outgoing data channel %p transmitted", chan);
+}
+
+static void l2cap_status(struct bt_l2cap_chan *chan, atomic_t *status)
+{
+	shell_print(ctx_shell, "Channel %p status %u", chan, status);
+}
+
 static void l2cap_connected(struct bt_l2cap_chan *chan)
 {
 	struct l2ch *c = L2CH_CHAN(chan);
@@ -143,6 +153,8 @@ static struct net_buf *l2cap_alloc_buf(struct bt_l2cap_chan *chan)
 static struct bt_l2cap_chan_ops l2cap_ops = {
 	.alloc_buf	= l2cap_alloc_buf,
 	.recv		= l2cap_recv,
+	.sent		= l2cap_sent,
+	.status		= l2cap_status,
 	.connected	= l2cap_connected,
 	.disconnected	= l2cap_disconnected,
 };
@@ -402,7 +414,7 @@ SHELL_STATIC_SUBCMD_SET_CREATE(whitelist_cmds,
 );
 
 SHELL_STATIC_SUBCMD_SET_CREATE(l2cap_cmds,
-	SHELL_CMD_ARG(connect, NULL, "<psm>", cmd_connect, 1, 0),
+	SHELL_CMD_ARG(connect, NULL, "<psm>", cmd_connect, 2, 0),
 	SHELL_CMD_ARG(disconnect, NULL, HELP_NONE, cmd_disconnect, 1, 0),
 	SHELL_CMD_ARG(metrics, NULL, "<value on, off>", cmd_metrics, 2, 0),
 	SHELL_CMD_ARG(recv, NULL, "[delay (in miliseconds)", cmd_recv, 1, 1),

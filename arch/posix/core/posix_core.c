@@ -72,6 +72,8 @@ struct threads_table_el {
 	bool running;     /* Is this the currently running thread */
 	pthread_t thread; /* Actual pthread_t as returned by native kernel */
 	int thead_cnt; /* For debugging: Unique, consecutive, thread number */
+	/* Pointer to the status kept in the Zephyr thread stack */
+	posix_thread_status_t *t_status;
 };
 
 static struct threads_table_el *threads_table;
@@ -185,7 +187,7 @@ static void posix_preexit_cleanup(void)
 /**
  * Let the ready thread run and block this thread until it is allowed again
  *
- * called from __swap() which does the picking from the kernel structures
+ * called from z_arch_swap() which does the picking from the kernel structures
  */
 void posix_swap(int next_allowed_thread_nbr, int this_th_nbr)
 {
@@ -254,17 +256,17 @@ static void posix_cleanup_handler(void *arg)
 
 /**
  * Helper function to start a Zephyr thread as a POSIX thread:
- *  It will block the thread until a __swap() is called for it
+ *  It will block the thread until a z_arch_swap() is called for it
  *
  * Spawned from posix_new_thread() below
  */
 static void *posix_thread_starter(void *arg)
 {
-	posix_thread_status_t *ptr = (posix_thread_status_t *) arg;
+	int thread_idx = (intptr_t)arg;
 
 	PC_DEBUG("Thread [%i] %i: %s: Starting\n",
-		threads_table[ptr->thread_idx].thead_cnt,
-		ptr->thread_idx,
+		threads_table[thread_idx].thead_cnt,
+		thread_idx,
 		__func__);
 
 	/*
@@ -286,17 +288,19 @@ static void *posix_thread_starter(void *arg)
 	pthread_cleanup_push(posix_cleanup_handler, arg);
 
 	PC_DEBUG("Thread [%i] %i: %s: After start mutex (hav mut)\n",
-		threads_table[ptr->thread_idx].thead_cnt,
-		ptr->thread_idx,
+		threads_table[thread_idx].thead_cnt,
+		thread_idx,
 		__func__);
 
 	/*
 	 * The thread would try to execute immediately, so we block it
 	 * until allowed
 	 */
-	posix_wait_until_allowed(ptr->thread_idx);
+	posix_wait_until_allowed(thread_idx);
 
 	posix_new_thread_pre_start();
+
+	posix_thread_status_t *ptr = threads_table[thread_idx].t_status;
 
 	z_thread_entry(ptr->entry_point, ptr->arg1, ptr->arg2, ptr->arg3);
 
@@ -306,13 +310,13 @@ static void *posix_thread_starter(void *arg)
 	 */
 	/* LCOV_EXCL_START */
 	posix_print_trace(PREFIX"Thread [%i] %i [%lu] ended!?!\n",
-			threads_table[ptr->thread_idx].thead_cnt,
-			ptr->thread_idx,
+			threads_table[thread_idx].thead_cnt,
+			thread_idx,
 			pthread_self());
 
 
-	threads_table[ptr->thread_idx].running = false;
-	threads_table[ptr->thread_idx].state = FAILED;
+	threads_table[thread_idx].running = false;
+	threads_table[thread_idx].state = FAILED;
 
 	pthread_cleanup_pop(1);
 
@@ -357,10 +361,10 @@ static int ttable_get_empty_slot(void)
 }
 
 /**
- * Called from z_new_thread(),
+ * Called from z_arch_new_thread(),
  * Create a new POSIX thread for the new Zephyr thread.
- * z_new_thread() picks from the kernel structures what it is that we need to
- * call with what parameters
+ * z_arch_new_thread() picks from the kernel structures what it is that we need
+ * to call with what parameters
  */
 void posix_new_thread(posix_thread_status_t *ptr)
 {
@@ -370,16 +374,18 @@ void posix_new_thread(posix_thread_status_t *ptr)
 	threads_table[t_slot].state = USED;
 	threads_table[t_slot].running = false;
 	threads_table[t_slot].thead_cnt = thread_create_count++;
+	threads_table[t_slot].t_status = ptr;
 	ptr->thread_idx = t_slot;
 
 	PC_SAFE_CALL(pthread_create(&threads_table[t_slot].thread,
 				  NULL,
 				  posix_thread_starter,
-				  (void *)ptr));
+				  (void *)(intptr_t)t_slot));
 
-	PC_DEBUG("created thread [%i] %i [%lu]\n",
+	PC_DEBUG("%s created thread [%i] %i [%lu]\n",
+		__func__,
 		threads_table[t_slot].thead_cnt,
-		ptr->thread_idx,
+		t_slot,
 		threads_table[t_slot].thread);
 
 }

@@ -10,14 +10,14 @@
 #include <toolchain.h>
 #include <zephyr/types.h>
 #include <soc.h>
-#include <clock_control.h>
+#include <drivers/clock_control.h>
 
 #include "hal/cpu.h"
 #include "hal/cntr.h"
 #include "hal/ccm.h"
 #include "hal/radio.h"
 
-#if defined(CONFIG_BT_LL_SW)
+#if defined(CONFIG_BT_LL_SW_LEGACY)
 #include "util/util.h"
 #include "util/memq.h"
 #include "pdu.h"
@@ -171,7 +171,11 @@ static u32_t init(u8_t chan, u8_t phy, void (*isr)(void *param))
 
 	/* Setup resources required by Radio */
 	hf_clock = radio_hf_clock_get();
-	clock_control_on(hf_clock, (void *)1); /* start clock, blocking. */
+	clock_control_on(hf_clock, NULL); /* start clock, blocking. */
+
+	while (clock_control_get_status(hf_clock, NULL) !=
+			CLOCK_CONTROL_STATUS_ON) {
+	}
 
 	/* Reset Radio h/w */
 	radio_reset();

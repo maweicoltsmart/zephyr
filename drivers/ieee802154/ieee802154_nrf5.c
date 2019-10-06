@@ -7,7 +7,11 @@
  */
 
 #define LOG_MODULE_NAME ieee802154_nrf5
+#if defined(CONFIG_IEEE802154_DRIVER_LOG_LEVEL)
 #define LOG_LEVEL CONFIG_IEEE802154_DRIVER_LOG_LEVEL
+#else
+#define LOG_LEVEL LOG_LEVEL_NONE
+#endif
 
 #include <logging/log.h>
 LOG_MODULE_REGISTER(LOG_MODULE_NAME);
@@ -27,13 +31,12 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 #include <net/openthread.h>
 #endif
 
-#include <misc/byteorder.h>
+#include <sys/byteorder.h>
 #include <string.h>
 #include <random/rand32.h>
 
 #include <net/ieee802154_radio.h>
 
-#include "nrf52840.h"
 #include "ieee802154_nrf5.h"
 #include "nrf_802154.h"
 
@@ -118,7 +121,7 @@ static void nrf5_rx_thread(void *arg1, void *arg2, void *arg3)
 		nrf_802154_buffer_free_raw(rx_frame->psdu);
 		rx_frame->psdu = NULL;
 
-		if (CONFIG_IEEE802154_DRIVER_LOG_LEVEL >= LOG_LEVEL_DBG) {
+		if (LOG_LEVEL >= LOG_LEVEL_DBG) {
 			net_analyze_stack(
 				"nRF5 rx stack",
 				Z_THREAD_STACK_BUFFER(nrf5_radio->rx_stack),
@@ -344,9 +347,9 @@ static void nrf5_irq_config(struct device *dev)
 {
 	ARG_UNUSED(dev);
 
-	IRQ_CONNECT(NRF5_IRQ_RADIO_IRQn, NRF_802154_IRQ_PRIORITY,
+	IRQ_CONNECT(RADIO_IRQn, NRF_802154_IRQ_PRIORITY,
 		    nrf5_radio_irq, NULL, 0);
-	irq_enable(NRF5_IRQ_RADIO_IRQn);
+	irq_enable(RADIO_IRQn);
 }
 
 static int nrf5_init(struct device *dev)
@@ -365,7 +368,7 @@ static int nrf5_init(struct device *dev)
 	k_thread_create(&nrf5_radio->rx_thread, nrf5_radio->rx_stack,
 			CONFIG_IEEE802154_NRF5_RX_STACK_SIZE,
 			nrf5_rx_thread, dev, NULL, NULL,
-			K_PRIO_COOP(2), 0, 0);
+			K_PRIO_COOP(2), 0, K_NO_WAIT);
 
 	k_thread_name_set(&nrf5_radio->rx_thread, "802154 RX");
 

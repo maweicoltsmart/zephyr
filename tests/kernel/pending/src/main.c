@@ -35,12 +35,12 @@ static K_THREAD_STACK_DEFINE(offload_work_q_stack,
 			     CONFIG_OFFLOAD_WORKQUEUE_STACK_SIZE);
 
 struct fifo_data {
-	u32_t reserved;
+	intptr_t reserved;
 	u32_t data;
 };
 
 struct lifo_data {
-	u32_t reserved;
+	intptr_t reserved;
 	u32_t data;
 };
 
@@ -196,7 +196,7 @@ static void timer_tests(void)
 
 	timer_start_tick = k_uptime_get_32();
 
-	k_timer_start(&timer, NUM_SECONDS(1), 0);
+	k_timer_start(&timer, NUM_SECONDS(1), K_NO_WAIT);
 
 	if (k_timer_status_sync(&timer)) {
 		timer_data = timer.user_data;
@@ -438,7 +438,7 @@ void test_pending(void)
 void test_main(void)
 {
 	ztest_test_suite(pend,
-			ztest_unit_test(test_pending));
+			ztest_1cpu_unit_test(test_pending));
 	ztest_run_test_suite(pend);
 }
 

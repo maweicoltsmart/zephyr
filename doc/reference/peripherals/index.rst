@@ -7,7 +7,6 @@ Peripherals
    :maxdepth: 1
 
    adc.rst
-   can.rst
    counter.rst
    dma.rst
    entropy.rst
@@ -19,6 +18,7 @@ Peripherals
    ipm.rst
    pinmux.rst
    pwm.rst
+   ps2.rst
    sensor.rst
    spi.rst
    uart.rst

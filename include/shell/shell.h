@@ -14,7 +14,7 @@
 #include <shell/shell_log_backend.h>
 #include <logging/log_instance.h>
 #include <logging/log.h>
-#include <misc/util.h>
+#include <sys/util.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,6 +28,10 @@ extern "C" {
 
 #ifndef CONFIG_SHELL_PRINTF_BUFF_SIZE
 #define CONFIG_SHELL_PRINTF_BUFF_SIZE 0
+#endif
+
+#ifndef CONFIG_SHELL_HISTORY_BUFFER
+#define CONFIG_SHELL_HISTORY_BUFFER 0
 #endif
 
 #define SHELL_CMD_ROOT_LVL		(0u)
@@ -500,7 +504,7 @@ struct shell_stats {
 	u32_t log_lost_cnt; /*!< Lost log counter.*/
 };
 
-#if CONFIG_SHELL_STATS
+#ifdef CONFIG_SHELL_STATS
 #define SHELL_STATS_DEFINE(_name) static struct shell_stats _name##_stats
 #define SHELL_STATS_PTR(_name) (&(_name##_stats))
 #else
@@ -554,6 +558,9 @@ struct shell_ctx {
 
 	/*!< Currently executed command.*/
 	struct shell_static_entry active_cmd;
+
+	/* New root command. If NULL shell uses default root commands. */
+	const struct shell_static_entry *selected_cmd;
 
 	/*!< VT100 color and cursor position, terminal width.*/
 	struct shell_vt100_ctx vt100_ctx;
@@ -640,7 +647,7 @@ extern void shell_print_stream(const void *user_ctx, const char *data,
 	SHELL_LOG_BACKEND_DEFINE(_name, _name##_out_buffer,		      \
 				 CONFIG_SHELL_PRINTF_BUFF_SIZE,		      \
 				 _log_queue_size, _log_timeout);	      \
-	SHELL_HISTORY_DEFINE(_name, CONFIG_SHELL_CMD_BUFF_SIZE, 7);	      \
+	SHELL_HISTORY_DEFINE(_name##_history, CONFIG_SHELL_HISTORY_BUFFER);   \
 	SHELL_FPRINTF_DEFINE(_name##_fprintf, &_name, _name##_out_buffer,     \
 			     CONFIG_SHELL_PRINTF_BUFF_SIZE,		      \
 			     true, shell_print_stream);			      \
@@ -652,7 +659,8 @@ extern void shell_print_stream(const void *user_ctx, const char *data,
 		.default_prompt = _prompt,				      \
 		.iface = _transport_iface,				      \
 		.ctx = &UTIL_CAT(_name, _ctx),				      \
-		.history = SHELL_HISTORY_PTR(_name),			      \
+		.history = IS_ENABLED(CONFIG_SHELL_HISTORY) ?		      \
+				&_name##_history : NULL,		      \
 		.shell_flag = _shell_flag,				      \
 		.fprintf_ctx = &_name##_fprintf,			      \
 		.stats = SHELL_STATS_PTR(_name),			      \
@@ -843,9 +851,12 @@ void shell_help(const struct shell *shell);
  *	 This function must not be called from shell command context!
 
  *
- * @param[in] shell	Pointer to the shell instance. It can be NULL when
+ * @param[in] shell	Pointer to the shell instance.
+ *			@rst
+ *			It can be NULL when
  *			the :option:`CONFIG_SHELL_BACKEND_DUMMY` option is
  *			enabled.
+ *			@endrst
  * @param[in] cmd	Command to be executed.
  *
  * @returns		Result of the execution

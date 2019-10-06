@@ -18,10 +18,14 @@ User and Developer Guides
    device_mgmt/dfu
    documentation/index
    dts/index
+   env_vars.rst
    coverage.rst
    kconfig/index
+   modules.rst
    networking/index
+   portability/index.rst
    porting/index
    test/index
    tracing/index
    west/index
+   optimizations/index

@@ -15,14 +15,13 @@
 
 #include <kernel.h>
 #include <init.h>
-#include <nrfx.h>
-#include <nrf_power.h>
+#include <hal/nrf_power.h>
 #include <soc/nrfx_coredep.h>
 #include <logging/log.h>
 
 #ifdef CONFIG_RUNTIME_NMI
-extern void z_NmiInit(void);
-#define NMI_INIT() z_NmiInit()
+extern void z_arm_nmi_init(void);
+#define NMI_INIT() z_arm_nmi_init()
 #else
 #define NMI_INIT()
 #endif
@@ -47,8 +46,6 @@ static int nordicsemi_nrf51_init(struct device *arg)
 
 	key = irq_lock();
 
-	SystemInit();
-
 	/* Install default handler that simply resets the CPU
 	 * if configured in the kernel, NOP otherwise
 	 */
@@ -69,6 +66,11 @@ void z_arch_busy_wait(u32_t time_us)
 
 	time_us -= DELAY_CALL_OVERHEAD_US;
 	nrfx_coredep_delay_us(time_us);
+}
+
+void z_platform_init(void)
+{
+	SystemInit();
 }
 
 SYS_INIT(nordicsemi_nrf51_init, PRE_KERNEL_1, 0);

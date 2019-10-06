@@ -31,7 +31,13 @@ struct _callee_saved {
 	u32_t v6;  /* r9 */
 	u32_t v7;  /* r10 */
 	u32_t v8;  /* r11 */
+#if defined(CONFIG_CPU_CORTEX_R)
+	u32_t spsr;/* r12 */
 	u32_t psp; /* r13 */
+	u32_t lr;  /* r14 */
+#else
+	u32_t psp; /* r13 */
+#endif
 };
 
 typedef struct _callee_saved _callee_saved_t;
@@ -74,9 +80,11 @@ struct _thread_arch {
 	struct _preempt_float  preempt_float;
 #endif
 
-#ifdef CONFIG_USERSPACE
+#if defined(CONFIG_USERSPACE) || defined(CONFIG_FP_SHARING)
 	u32_t mode;
+#if defined(CONFIG_USERSPACE)
 	u32_t priv_stack_start;
+#endif
 #endif
 };
 

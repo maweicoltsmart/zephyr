@@ -14,6 +14,41 @@
  * Macros to abstract compiler capabilities for GCC toolchain.
  */
 
+/*
+ * Older versions of GCC do not define __BYTE_ORDER__, so it must be manually
+ * detected and defined using arch-specific definitions.
+ */
+
+#ifndef _LINKER
+
+#ifndef __ORDER_BIG_ENDIAN__
+#define __ORDER_BIG_ENDIAN__            (1)
+#endif
+
+#ifndef __ORDER_LITTLE_ENDIAN__
+#define __ORDER_LITTLE_ENDIAN__         (2)
+#endif
+
+#ifndef __BYTE_ORDER__
+#if defined(__BIG_ENDIAN__) || defined(__ARMEB__) || \
+    defined(__THUMBEB__) || defined(__AARCH64EB__) || \
+    defined(__MIPSEB__) || defined(__TC32EB__)
+
+#define __BYTE_ORDER__                  __ORDER_BIG_ENDIAN__
+
+#elif defined(__LITTLE_ENDIAN__) || defined(__ARMEL__) || \
+      defined(__THUMBEL__) || defined(__AARCH64EL__) || \
+      defined(__MIPSEL__) || defined(__TC32EL__)
+
+#define __BYTE_ORDER__                  __ORDER_LITTLE_ENDIAN__
+
+#else
+#error "__BYTE_ORDER__ is not defined and cannot be automatically resolved"
+#endif
+#endif
+
+#endif /* !_LINKER */
+
 /* C++11 has static_assert built in */
 #ifdef __cplusplus
 #define BUILD_ASSERT(EXPR) static_assert(EXPR, "")
@@ -139,7 +174,9 @@ do {                                                                    \
 #define __printf_like(f, a)   __attribute__((format (printf, f, a)))
 #endif
 #define __used		__attribute__((__used__))
+#ifndef __deprecated
 #define __deprecated	__attribute__((deprecated))
+#endif
 #define ARG_UNUSED(x) (void)(x)
 
 #define likely(x)   __builtin_expect((bool)!!(x), true)
@@ -151,6 +188,22 @@ do {                                                                    \
 #define __weak __attribute__((__weak__))
 #endif
 #define __unused __attribute__((__unused__))
+
+/* Builtins with availability that depend on the compiler version. */
+#if __GNUC__ >= 5
+#define HAS_BUILTIN___builtin_add_overflow 1
+#define HAS_BUILTIN___builtin_sub_overflow 1
+#define HAS_BUILTIN___builtin_mul_overflow 1
+#define HAS_BUILTIN___builtin_div_overflow 1
+#endif
+#if __GNUC__ >= 4
+#define HAS_BUILTIN___builtin_clz 1
+#define HAS_BUILTIN___builtin_clzl 1
+#define HAS_BUILTIN___builtin_clzll 1
+#define HAS_BUILTIN___builtin_ctz 1
+#define HAS_BUILTIN___builtin_ctzl 1
+#define HAS_BUILTIN___builtin_ctzll 1
+#endif
 
 /* Be *very* careful with this, you cannot filter out with -wno-deprecated,
  * which has implications for -Werror
@@ -166,6 +219,11 @@ do {                                                                    \
 #if defined(CONFIG_ISA_THUMB2)
 
 #define FUNC_CODE() .thumb;
+#define FUNC_INSTR(a)
+
+#elif defined(CONFIG_ISA_ARM)
+
+#define FUNC_CODE() .code 32
 #define FUNC_INSTR(a)
 
 #else
@@ -192,7 +250,7 @@ do {                                                                    \
 
 #if defined(_ASMLANGUAGE) && !defined(_LINKER)
 
-#if defined(CONFIG_ARM) || defined(CONFIG_NIOS2) || defined(CONFIG_RISCV32) \
+#if defined(CONFIG_ARM) || defined(CONFIG_NIOS2) || defined(CONFIG_RISCV) \
 	|| defined(CONFIG_XTENSA)
 #define GTEXT(sym) .global sym; .type sym, %function
 #define GDATA(sym) .global sym; .type sym, %object
@@ -338,7 +396,7 @@ do {                                                                    \
 		",%0"                               \
 		"\n\t.type\t" #name ",@object" :  : "n"(value))
 
-#elif defined(CONFIG_NIOS2) || defined(CONFIG_RISCV32) || defined(CONFIG_XTENSA)
+#elif defined(CONFIG_NIOS2) || defined(CONFIG_RISCV) || defined(CONFIG_XTENSA)
 
 /* No special prefixes necessary for constants in this arch AFAICT */
 #define GEN_ABSOLUTE_SYM(name, value)		\
@@ -358,5 +416,33 @@ do {                                                                    \
 #define compiler_barrier() do { \
 	__asm__ __volatile__ ("" ::: "memory"); \
 } while (false)
+
+/** @brief Return larger value of two provided expressions.
+ *
+ * Macro ensures that expressions are evaluated only once.
+ *
+ * @note Macro has limited usage compared to the standard macro as it cannot be
+ *	 used:
+ *	 - to generate constant integer, e.g. __aligned(Z_MAX(4,5))
+ *	 - static variable, e.g. array like static u8_t array[Z_MAX(...)];
+ */
+#define Z_MAX(a, b) ({ \
+		/* random suffix to avoid naming conflict */ \
+		__typeof__(a) _value_a_ = (a); \
+		__typeof__(b) _value_b_ = (b); \
+		_value_a_ > _value_b_ ? _value_a_ : _value_b_; \
+	})
+
+/** @brief Return smaller value of two provided expressions.
+ *
+ * Macro ensures that expressions are evaluated only once. See @ref Z_MAX for
+ * macro limitations.
+ */
+#define Z_MIN(a, b) ({ \
+		/* random suffix to avoid naming conflict */ \
+		__typeof__(a) _value_a_ = (a); \
+		__typeof__(b) _value_b_ = (b); \
+		_value_a_ < _value_b_ ? _value_a_ : _value_b_; \
+	})
 
 #endif /* ZEPHYR_INCLUDE_TOOLCHAIN_GCC_H_ */

@@ -1,28 +1,25 @@
----
 title: STM32 PWM
-version: 0.1
 
 description: >
     This binding gives a base representation of the STM32 PWM
 
-properties:
-    compatible:
-      constraint: "st,stm32-pwm"
+compatible: "st,stm32-pwm"
 
+include: [pwm-controller.yaml, base.yaml]
+
+properties:
     label:
-      type: string
-      category: required
-      description: Human readable string describing the device (used by Zephyr for API name)
-      generation: define
+      required: true
 
     st,prescaler:
       type: int
-      category: required
+      required: true
       description: Clock prescaler at the input of the timer
-      generation: define
 
-"#cells":
+    "#pwm-cells":
+      const: 2
+
+pwm-cells:
   - channel
 # period in terms of nanoseconds
   - period
-...

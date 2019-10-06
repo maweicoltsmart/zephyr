@@ -29,9 +29,11 @@
 GEN_OFFSET_SYM(_thread_arch_t, basepri);
 GEN_OFFSET_SYM(_thread_arch_t, swap_return_value);
 
-#ifdef CONFIG_USERSPACE
+#if defined(CONFIG_USERSPACE) || defined(CONFIG_FP_SHARING)
 GEN_OFFSET_SYM(_thread_arch_t, mode);
+#if defined(CONFIG_USERSPACE)
 GEN_OFFSET_SYM(_thread_arch_t, priv_stack_start);
+#endif
 #endif
 
 #if defined(CONFIG_FLOAT) && defined(CONFIG_FP_SHARING)
@@ -63,6 +65,10 @@ GEN_OFFSET_SYM(_callee_saved_t, v6);
 GEN_OFFSET_SYM(_callee_saved_t, v7);
 GEN_OFFSET_SYM(_callee_saved_t, v8);
 GEN_OFFSET_SYM(_callee_saved_t, psp);
+#if defined(CONFIG_CPU_CORTEX_R)
+GEN_OFFSET_SYM(_callee_saved_t, spsr);
+GEN_OFFSET_SYM(_callee_saved_t, lr);
+#endif
 
 /* size of the entire preempt registers structure */
 

@@ -69,9 +69,10 @@ backend.
 Zephyr Storage Backends
 ***********************
 
-Zephyr has two existing backend storages which can be a Flash Circular Buffer
-(:option:`CONFIG_SETTINGS_FCB`) or a file in the filesystem
-(:option:`CONFIG_SETTINGS_FS`).
+Zephyr has three storage backends: a Flash Circular Buffer
+(:option:`CONFIG_SETTINGS_FCB`), a file in the filesystem
+(:option:`CONFIG_SETTINGS_FS`), or non-volatile storage
+(:option:`CONFIG_SETTINGS_NVS`).
 
 You can declare multiple sources for settings; settings from
 all of these are restored when ``settings_load()`` is called.
@@ -84,6 +85,9 @@ using ``settings_fcb_dst()``. As a side-effect,  ``settings_fcb_src()``
 initializes the FCB area, so it must be called before calling
 ``settings_fcb_dst()``. File read target is registered using
 ``settings_file_src()``, and write target by using ``settings_file_dst()``.
+Non-volatile storage read target is registered using
+``settings_nvs_src()``, and write target by using
+``settings_nvs_dst()``.
 
 Loading data from persisted storage
 ***********************************
@@ -97,6 +101,28 @@ After all data is loaded, the ``h_commit`` handler is issued,
 signalling the application that the settings were successfully
 retrieved.
 
+Storing data to persistent storage
+**********************************
+
+A call to ``settings_save_one()`` uses a backend implementation to store
+settings data to the storage medium. A call to ``settings_save()`` uses an
+``h_export`` implementation to store different data in one operation using
+``settings_save_one()``.
+A key need to be covered by a ``h_export`` only if it is supposed to be stored
+by ``settings_save()`` call.
+
+For both FCB and filesystem back-end only storage requests with data which
+changes most actual key's value are stored, therefore there is no need to check
+whether a value changed by the application. Such a storage mechanism implies
+that storage can contain multiple value assignments for a key , while only the
+last is the current value for the key.
+
+Garbage collection
+==================
+When storage becomes full (FCB) or consumes too much space (file system),
+the backend removes non-recent key-value pairs records and unnecessary
+key-delete records.
+
 Example: Device Configuration
 *****************************
 
@@ -108,7 +134,9 @@ export functionality, for example, writing to the shell console).
 
 .. code-block:: c
 
-    static int8 foo_val;
+    #define DEFAULT_FOO_VAL_VALUE 1
+
+    static int8 foo_val = DEFAULT_FOO_VAL_VALUE;
 
     struct settings_handler my_conf = {
         .name = "foo",
@@ -119,9 +147,25 @@ export functionality, for example, writing to the shell console).
     static int foo_settings_set(int argc, char **argv, settings_read_cb read_cb,
                                 void *cb_arg)
     {
+        int rc;
+
         if (argc == 1) {
             if (!strcmp(argv[0], "bar")) {
-                return read_cb(cb_arg, &foo_val, sizeof(foo_val));
+                rc = read_cb(cb_arg, &foo_val, sizeof(foo_val));
+                if (rc >= 0) {
+                    /* key-value pair was properly read.
+                     * rc contains value length.
+                     * key-value is deleted if length equals 0.
+                     * Let's return success.
+                     */
+                    if (rc == 0) {
+                        /* set the default value as its key is deleted */
+                        foo_val = DEFAULT_FOO_VAL_VALUE;
+                    }
+                    return 0;
+                }
+                /* read-out error */
+                return rc;
             }
         }
 
@@ -159,9 +203,16 @@ up from where it was before restart.
     static int foo_settings_set(int argc, char **argv, settings_read_cb read_cb,
                                 void *cb_arg)
     {
+        int rc;
+
         if (argc == 1) {
             if (!strcmp(argv[0], "bar")) {
-                return read_cb(cb_arg, &foo_val, sizeof(foo_val));
+                rc = read_cb(cb_arg, &foo_val, sizeof(foo_val));
+                if (rc >= 0) {
+                    return 0;
+                }
+
+                return rc;
             }
         }
 
@@ -217,4 +268,3 @@ The Settings subsystem APIs are provided by ``settings.h``:
 
 .. doxygengroup:: settings
    :project: Zephyr
-

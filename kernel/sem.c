@@ -23,14 +23,11 @@
 #include <toolchain.h>
 #include <linker/sections.h>
 #include <wait_q.h>
-#include <misc/dlist.h>
+#include <sys/dlist.h>
 #include <ksched.h>
 #include <init.h>
 #include <syscall_handler.h>
-#include <tracing.h>
-
-extern struct k_sem _k_sem_list_start[];
-extern struct k_sem _k_sem_list_end[];
+#include <debug/tracing.h>
 
 /* We use a system-wide lock to synchronize semaphores, which has
  * unfortunate performance impact vs. using a per-object lock
@@ -52,9 +49,7 @@ static int init_sem_module(struct device *dev)
 {
 	ARG_UNUSED(dev);
 
-	struct k_sem *sem;
-
-	for (sem = _k_sem_list_start; sem < _k_sem_list_end; sem++) {
+	Z_STRUCT_SECTION_FOREACH(k_sem, sem) {
 		SYS_TRACING_OBJ_INIT(k_sem, sem);
 	}
 	return 0;
@@ -85,13 +80,14 @@ void z_impl_k_sem_init(struct k_sem *sem, unsigned int initial_count,
 }
 
 #ifdef CONFIG_USERSPACE
-Z_SYSCALL_HANDLER(k_sem_init, sem, initial_count, limit)
+void z_vrfy_k_sem_init(struct k_sem *sem, unsigned int initial_count,
+		      unsigned int limit)
 {
 	Z_OOPS(Z_SYSCALL_OBJ_INIT(sem, K_OBJ_SEM));
 	Z_OOPS(Z_SYSCALL_VERIFY(limit != 0 && initial_count <= limit));
-	z_impl_k_sem_init((struct k_sem *)sem, initial_count, limit);
-	return 0;
+	z_impl_k_sem_init(sem, initial_count, limit);
 }
+#include <syscalls/k_sem_init_mrsh.c>
 #endif
 
 static inline void handle_poll_events(struct k_sem *sem)
@@ -114,7 +110,7 @@ static void do_sem_give(struct k_sem *sem)
 
 	if (thread != NULL) {
 		z_ready_thread(thread);
-		z_set_thread_return_value(thread, 0);
+		z_arch_thread_return_value_set(thread, 0);
 	} else {
 		increment_count_up_to_limit(sem);
 		handle_poll_events(sem);
@@ -132,12 +128,17 @@ void z_impl_k_sem_give(struct k_sem *sem)
 }
 
 #ifdef CONFIG_USERSPACE
-Z_SYSCALL_HANDLER1_SIMPLE_VOID(k_sem_give, K_OBJ_SEM, struct k_sem *);
+static inline void z_vrfy_k_sem_give(struct k_sem *sem)
+{
+	Z_OOPS(Z_SYSCALL_OBJ(sem, K_OBJ_SEM));
+	z_impl_k_sem_give(sem);
+}
+#include <syscalls/k_sem_give_mrsh.c>
 #endif
 
 int z_impl_k_sem_take(struct k_sem *sem, s32_t timeout)
 {
-	__ASSERT(((z_is_in_isr() == false) || (timeout == K_NO_WAIT)), "");
+	__ASSERT(((z_arch_is_in_isr() == false) || (timeout == K_NO_WAIT)), "");
 
 	sys_trace_void(SYS_TRACE_ID_SEMA_TAKE);
 	k_spinlock_key_t key = k_spin_lock(&lock);
@@ -162,12 +163,25 @@ int z_impl_k_sem_take(struct k_sem *sem, s32_t timeout)
 }
 
 #ifdef CONFIG_USERSPACE
-Z_SYSCALL_HANDLER(k_sem_take, sem, timeout)
+static inline int z_vrfy_k_sem_take(struct k_sem *sem, s32_t timeout)
 {
 	Z_OOPS(Z_SYSCALL_OBJ(sem, K_OBJ_SEM));
 	return z_impl_k_sem_take((struct k_sem *)sem, timeout);
 }
+#include <syscalls/k_sem_take_mrsh.c>
 
-Z_SYSCALL_HANDLER1_SIMPLE_VOID(k_sem_reset, K_OBJ_SEM, struct k_sem *);
-Z_SYSCALL_HANDLER1_SIMPLE(k_sem_count_get, K_OBJ_SEM, struct k_sem *);
+static inline void z_vrfy_k_sem_reset(struct k_sem *sem)
+{
+	Z_OOPS(Z_SYSCALL_OBJ(sem, K_OBJ_SEM));
+	z_impl_k_sem_reset(sem);
+}
+#include <syscalls/k_sem_reset_mrsh.c>
+
+static inline unsigned int z_vrfy_k_sem_count_get(struct k_sem *sem)
+{
+	Z_OOPS(Z_SYSCALL_OBJ(sem, K_OBJ_SEM));
+	return z_impl_k_sem_count_get(sem);
+}
+#include <syscalls/k_sem_count_get_mrsh.c>
+
 #endif

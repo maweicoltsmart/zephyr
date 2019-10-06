@@ -550,13 +550,13 @@ void test_sem_measure_timeouts(void)
 		     "k_sem_take failed when its shouldn't have");
 
 	zassert_true((end_ticks - start_ticks >= K_SECONDS(1)),
-		     "time missmatch expected %d ,got %d\n",
+		     "time missmatch expected %d, got %d\n",
 		     K_SECONDS(1), end_ticks - start_ticks);
 
 	/* With 0 as the timeout */
 	start_ticks = k_uptime_get();
 
-	ret_value = k_sem_take(&simple_sem, 0);
+	ret_value = k_sem_take(&simple_sem, K_NO_WAIT);
 
 	end_ticks = k_uptime_get();
 
@@ -564,7 +564,7 @@ void test_sem_measure_timeouts(void)
 		     "k_sem_take failed when its shouldn't have");
 
 	zassert_true((end_ticks - start_ticks < 1),
-		     "time missmatch expected %d ,got %d\n",
+		     "time missmatch expected %d, got %d\n",
 		     1, end_ticks - start_ticks);
 
 }
@@ -593,7 +593,7 @@ void test_sem_measure_timeout_from_thread(void)
 	k_sem_reset(&simple_sem);
 	k_sem_reset(&multiple_thread_sem);
 
-	/* Give a semaphore from a thread and calcualte the time taken.*/
+	/* Give a semaphore from a thread and calculate the time taken.*/
 	k_thread_create(&sem_tid, stack_1, STACK_SIZE,
 			test_sem_measure_timeout_from_thread_helper,
 			NULL, NULL, NULL,
@@ -619,21 +619,20 @@ void test_sem_measure_timeout_from_thread(void)
 
 }
 
-void test_sem_multiple_take_and_timeouts_helper(void *timeout,
-						void *p2,
-						void *p3)
+void test_sem_multiple_take_and_timeouts_helper(void *p1, void *p2, void *p3)
 {
+	int timeout = POINTER_TO_INT(p1);
 	u32_t start_ticks, end_ticks;
 	size_t bytes_written;
 
 	start_ticks = k_uptime_get();
 
-	k_sem_take(&simple_sem, (int)timeout);
+	k_sem_take(&simple_sem, timeout);
 
 	end_ticks = k_uptime_get();
 
-	zassert_true((end_ticks - start_ticks >= (int)timeout),
-		     "time missmatch. expected less than%d ,got %d\n",
+	zassert_true((end_ticks - start_ticks >= timeout),
+		     "time missmatch. expected less than %d ,got %d\n",
 		     timeout, end_ticks - start_ticks);
 
 
@@ -661,7 +660,7 @@ void test_sem_multiple_take_and_timeouts(void)
 		k_thread_create(&multiple_tid[i],
 				multiple_stack[i], STACK_SIZE,
 				test_sem_multiple_take_and_timeouts_helper,
-				(void *)K_SECONDS(i + 1), NULL, NULL,
+				INT_TO_POINTER(K_SECONDS(i + 1)), NULL, NULL,
 				K_PRIO_PREEMPT(1), 0, K_NO_WAIT);
 	}
 
@@ -679,26 +678,26 @@ void test_sem_multiple_take_and_timeouts(void)
 
 }
 
-void test_sem_multi_take_timeout_diff_sem_helper(void *timeout,
-						 void *sema,
-						 void *p3)
+void test_sem_multi_take_timeout_diff_sem_helper(void *p1, void *p2, void *p3)
 {
+	int timeout = POINTER_TO_INT(p1);
+	struct k_sem *sema = p2;
 	u32_t start_ticks, end_ticks;
 	s32_t ret_value;
 	size_t bytes_written;
 	struct timeout_info info = {
-		.timeout = (u32_t) timeout,
-		.sema    = (struct k_sem *)sema
+		.timeout = timeout,
+		.sema    = sema
 	};
 
 	start_ticks = k_uptime_get();
 
-	ret_value = k_sem_take((struct k_sem *)sema, (int)timeout);
+	ret_value = k_sem_take(sema, timeout);
 
 	end_ticks = k_uptime_get();
 
-	zassert_true((end_ticks - start_ticks >= (int)timeout),
-		     "time missmatch. expected less than%d ,got %d\n",
+	zassert_true((end_ticks - start_ticks >= timeout),
+		     "time missmatch. expected less than %d, got %d\n",
 		     timeout, end_ticks - start_ticks);
 
 
@@ -736,9 +735,8 @@ void test_sem_multi_take_timeout_diff_sem(void)
 		k_thread_create(&multiple_tid[i],
 				multiple_stack[i], STACK_SIZE,
 				test_sem_multi_take_timeout_diff_sem_helper,
-				(void *)seq_info[i].timeout,
-				(void *)seq_info[i].sema,
-				NULL,
+				INT_TO_POINTER(seq_info[i].timeout),
+				seq_info[i].sema, NULL,
 				K_PRIO_PREEMPT(1), 0, K_NO_WAIT);
 	}
 
@@ -771,16 +769,16 @@ void test_main(void)
 			 ztest_user_unit_test(test_simple_sem_from_task),
 			 ztest_user_unit_test(test_sem_take_no_wait),
 			 ztest_user_unit_test(test_sem_take_no_wait_fails),
-			 ztest_user_unit_test(test_sem_take_timeout_fails),
+			 ztest_1cpu_user_unit_test(test_sem_take_timeout_fails),
 			 ztest_user_unit_test(test_sem_take_timeout),
-			 ztest_user_unit_test(test_sem_take_timeout_forever),
+			 ztest_1cpu_user_unit_test(test_sem_take_timeout_forever),
 			 ztest_unit_test(test_sem_take_timeout_isr),
-			 ztest_user_unit_test(test_sem_take_multiple),
+			 ztest_1cpu_user_unit_test(test_sem_take_multiple),
 			 ztest_unit_test(test_sem_give_take_from_isr),
 			 ztest_unit_test(test_sem_multiple_threads_wait),
 			 ztest_unit_test(test_sem_measure_timeouts),
 			 ztest_unit_test(test_sem_measure_timeout_from_thread),
-			 ztest_unit_test(test_sem_multiple_take_and_timeouts),
+			 ztest_1cpu_unit_test(test_sem_multiple_take_and_timeouts),
 			 ztest_unit_test(test_sem_multi_take_timeout_diff_sem));
 	ztest_run_test_suite(test_semaphore);
 }

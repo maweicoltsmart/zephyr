@@ -13,9 +13,9 @@
 
 #include <soc.h>
 #include <errno.h>
-#include <pwm.h>
+#include <drivers/pwm.h>
 #include <kernel.h>
-#include <gpio.h>
+#include <drivers/gpio.h>
 #include <string.h>
 
 #define PWM_ESP32_HSCH_HPOINT(i) (LEDC_HSCH0_HPOINT_REG + (0x14 * i))
@@ -92,14 +92,14 @@ static const char *esp32_get_gpio_for_pin(int pin)
 {
 	if (pin < 32) {
 #if defined(CONFIG_GPIO_ESP32_0)
-		return CONFIG_GPIO_ESP32_0_NAME;
+		return DT_INST_0_ESPRESSIF_ESP32_GPIO_LABEL;
 #else
 		return NULL;
 #endif /* CONFIG_GPIO_ESP32_0 */
 	}
 
 #if defined(CONFIG_GPIO_ESP32_1)
-	return CONFIG_GPIO_ESP32_1_NAME;
+	return DT_INST_1_ESPRESSIF_ESP32_GPIO_LABEL;
 #else
 	return NULL;
 #endif /* CONFIG_GPIO_ESP32_1 */

@@ -29,10 +29,10 @@
 #include <init.h>
 #include <toolchain.h>
 #include <linker/sections.h>
-#include <uart.h>
-#include <sys_io.h>
+#include <drivers/uart.h>
+#include <sys/sys_io.h>
 
-#include <drivers/serial/uart_ns16550.h>
+#include "uart_ns16550.h"
 
 /*
  * If PCP is set for any of the ports, enable support.
@@ -241,6 +241,13 @@ BUILD_ASSERT_MSG(IS_ENABLED(CONFIG_PCIE), "NS16550(s) in DT need CONFIG_PCIE");
 #endif
 #endif /* UART_NS16550_ACCESS_IOPORT */
 
+#ifdef CONFIG_UART_NS16550_ACCESS_WORD_ONLY
+#undef INBYTE
+#define INBYTE(x) INWORD(x)
+#undef OUTBYTE
+#define OUTBYTE(x, d) OUTWORD(x, d)
+#endif
+
 
 struct uart_ns16550_device_config {
 	u32_t sys_clk_freq;
@@ -363,8 +370,9 @@ static int uart_ns16550_init(struct device *dev)
 	OUTBYTE(LCR(dev), LCR_CS8 | LCR_1_STB | LCR_PDIS);
 
 	mdc = MCR_OUT2 | MCR_RTS | MCR_DTR;
-	if ((dev_data->options & UART_OPTION_AFCE) == UART_OPTION_AFCE)
+	if ((dev_data->options & UART_OPTION_AFCE) == UART_OPTION_AFCE) {
 		mdc |= MCR_AFCE;
+	}
 
 	OUTBYTE(MDC(dev), mdc);
 
@@ -405,8 +413,9 @@ static int uart_ns16550_init(struct device *dev)
  */
 static int uart_ns16550_poll_in(struct device *dev, unsigned char *c)
 {
-	if ((INBYTE(LSR(dev)) & LSR_RXRDY) == 0x00)
+	if ((INBYTE(LSR(dev)) & LSR_RXRDY) == 0x00) {
 		return (-1);
+	}
 
 	/* got a character */
 	*c = INBYTE(RDR(dev));
@@ -430,8 +439,8 @@ static void uart_ns16550_poll_out(struct device *dev,
 					   unsigned char c)
 {
 	/* wait for transmitter to ready to accept a character */
-	while ((INBYTE(LSR(dev)) & LSR_THRE) == 0)
-		;
+	while ((INBYTE(LSR(dev)) & LSR_THRE) == 0) {
+	}
 
 	OUTBYTE(THR(dev), c);
 }

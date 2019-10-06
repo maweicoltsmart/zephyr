@@ -1,32 +1,20 @@
-#
 # Copyright (c) 2018, Linaro Limited
-#
 # SPDX-License-Identifier: Apache-2.0
-#
----
-title: GPIO LED
-version: 0.1
 
-description: >
-    This is a representation of the LED GPIO nodes
+title: GPIO LEDs
 
-properties:
-    compatible:
-      type: string
-      category: required
-      description: compatible strings
-      constraint: "gpio-leds"
-      generation: define
+description: GPIO LEDs parent node
 
-    gpios:
-      type: compound
-      category: required
-      generation: define
+compatible: "gpio-leds"
 
-    label:
-      type: string
-      category: required
-      description: Human readable string describing the device (used by Zephyr for API name)
-      generation: define
-
-...
+child-binding:
+    title: GPIO LED node
+    description: GPIO LED child node
+    properties:
+       gpios:
+          type: phandle-array
+          required: true
+       label:
+          required: true
+          type: string
+          description: Human readable string describing the device (used by Zephyr for API name)

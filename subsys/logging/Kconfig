@@ -6,14 +6,28 @@
 
 menuconfig LOG
 	bool "Logging"
+	select PRINTK if USERSPACE
 	help
 	  Global switch for the logger, when turned off log calls will not be
 	  compiled in.
 
 if LOG
 
+config LOG_MINIMAL
+	bool "Enable minimal-footprint logging"
+	imply PRINTK
+	help
+	  Enable minimal logging implementation. This has very little footprint
+	  overhead on top of the printk() implementation for standard
+	  logging macros. Hexdump macros are also supported, with a small
+	  amount of code pulled in if used. Build time filtering is supported,
+	  but not runtime filtering. There are no timestamps, prefixes,
+	  colors, or asynchronous logging, and all messages are simply
+	  sent to printk().
+
 config LOG_RUNTIME_FILTERING
 	bool "Enable runtime reconfiguration of the logger"
+	depends on !LOG_FRONTEND && !LOG_MINIMAL
 	help
 	  Allow runtime configuration of maximal, independent severity
 	  level for instance.
@@ -67,7 +81,10 @@ config LOG_MAX_LEVEL
 	  - 3 INFO, maximal level set to LOG_LEVEL_INFO
 	  - 4 DEBUG, maximal level set to LOG_LEVEL_DBG
 
+if !LOG_MINIMAL
+
 menu "Prepend log message with function name"
+	depends on !LOG_FRONTEND
 
 config LOG_FUNC_NAME_PREFIX_ERR
 	bool "Error messages prepended"
@@ -92,7 +109,7 @@ config LOG_PRINTK
 config LOG_PRINTK_MAX_STRING_LENGTH
 	int "Maximum string length supported by LOG_PRINTK"
 	depends on LOG_PRINTK
-	depends on !LOG_IMMEDIATE
+	depends on (!LOG_IMMEDIATE || USERSPACE)
 	default 128
 	help
 	  Array is allocated on the stack.
@@ -129,6 +146,26 @@ config LOG_MODE_NO_OVERFLOW
 
 endchoice
 
+config LOG_BLOCK_IN_THREAD
+	bool "On log full block in thread context"
+	help
+	  When enabled logger will block (if in the thread context) when
+	  internal logger buffer is full and new message cannot be allocated.
+
+if LOG_BLOCK_IN_THREAD
+
+config LOG_BLOCK_IN_THREAD_TIMEOUT_MS
+	int "Maximum time (in milliseconds) thread can be blocked"
+	default 1000
+	range -1 10000
+	help
+	  If new buffer for a log message cannot be allocated in that time, log
+	  message is dropped. Forever blocking (-1) is possible however may lead
+	  to the logger deadlock if logging is enabled in threads used for
+	  logging (e.g. logger or shell thread).
+
+endif # LOG_BLOCK_IN_THREAD
+
 config LOG_PROCESS_TRIGGER_THRESHOLD
 	int "Amount of buffered logs which triggers processing thread."
 	default 10
@@ -162,6 +199,7 @@ config LOG_PROCESS_THREAD_STACK_SIZE
 	default 2048 if COVERAGE_GCOV
 	default 1024 if NO_OPTIMIZATIONS
 	default 1024 if XTENSA
+	default 4096 if (X86 && X86_LONGMODE)
 	default 768
 	help
 	  Set the internal stack size for log processing thread.
@@ -174,6 +212,17 @@ config LOG_BUFFER_SIZE
 	range 128 65536
 	help
 	  Number of bytes dedicated for the logger internal buffer.
+
+config LOG_DETECT_MISSED_STRDUP
+	bool "Detect missed handling of transient strings"
+	default y if !LOG_IMMEDIATE
+	help
+	  If enabled, logger will assert and log error message is it detects
+	  that string format specifier (%s) and string address which is not from
+	  read only memory section and not from pool used for string duplicates.
+	  String argument must be duplicated in that case using log_strdup().
+	  Detection is performed during log processing thus it does not impact
+	  logging timing.
 
 config LOG_STRDUP_MAX_STRING
 	int "Longest string that can be duplicated using log_strdup()"
@@ -192,6 +241,12 @@ config LOG_STRDUP_BUF_COUNT
 	  Each entry takes CONFIG_LOG_STRDUP_MAX_STRING bytes of memory plus
 	  some additional fixed overhead.
 
+config LOG_STRDUP_POOL_PROFILING
+	bool "Enable profiling of pool used for log_strdup()"
+	help
+	  When enabled, maximal utilization of the pool is tracked. It can
+	  be read out using shell command.
+
 endif # !LOG_IMMEDIATE
 
 config LOG_DOMAIN_ID
@@ -205,6 +260,14 @@ config LOG_CMDS
 	bool "Enable shell commands"
 	depends on SHELL
 	default y if SHELL
+
+config LOG_FRONTEND
+	bool "Enable frontend"
+	default n
+	select LOG_IMMEDIATE
+	help
+	  When enabled, logs are redirected to a custom frontend instead
+	  of being processed by the logger.
 
 config LOG_BACKEND_UART
 	bool "Enable UART backend"
@@ -345,6 +408,12 @@ config LOG_BACKEND_NATIVE_POSIX
 	help
 	  Enable backend in native_posix
 
+config LOG_BACKEND_QEMU_X86_64
+	bool "Enable QEMU x86_64 backend"
+	depends on BOARD_QEMU_X86_64
+	help
+	  Enable backend for qemu_x86_64 board
+
 config LOG_BACKEND_XTENSA_SIM
 	bool "Enable xtensa simulator backend"
 	depends on SOC_XTENSA_SAMPLE_CONTROLLER
@@ -422,4 +491,5 @@ config LOG_BACKEND_FORMAT_TIMESTAMP
 	help
 	  When enabled timestamp is formatted to hh:mm:ss:ms,us.
 
+endif # LOG_MINIMAL
 endif # LOG

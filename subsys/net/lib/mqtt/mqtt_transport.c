@@ -11,29 +11,6 @@
 
 #include "mqtt_transport.h"
 
-/* Transport handler functions for TCP socket transport. */
-extern int mqtt_client_tcp_connect(struct mqtt_client *client);
-extern int mqtt_client_tcp_write(struct mqtt_client *client, const u8_t *data,
-				 u32_t datalen);
-extern int mqtt_client_tcp_read(struct mqtt_client *client, u8_t *data,
-				u32_t buflen, bool shall_block);
-extern int mqtt_client_tcp_disconnect(struct mqtt_client *client);
-
-#if defined(CONFIG_MQTT_LIB_TLS)
-/* Transport handler functions for TLS socket transport. */
-extern int mqtt_client_tls_connect(struct mqtt_client *client);
-extern int mqtt_client_tls_write(struct mqtt_client *client, const u8_t *data,
-				 u32_t datalen);
-extern int mqtt_client_tls_read(struct mqtt_client *client, u8_t *data,
-				u32_t buflen, bool shall_block);
-extern int mqtt_client_tls_disconnect(struct mqtt_client *client);
-#endif /* CONFIG_MQTT_LIB_TLS */
-
-#if defined(CONFIG_MQTT_LIB_SOCKS)
-/* Transport handler functions for SOCKS5 proxy socket transport. */
-extern int mqtt_client_socks5_connect(struct mqtt_client *client);
-#endif /* CONFIG_MQTT_LIB_SOCKS */
-
 /**@brief Function pointer array for TCP/TLS transport handlers. */
 const struct transport_procedure transport_fn[MQTT_TRANSPORT_NUM] = {
 	{
@@ -50,14 +27,22 @@ const struct transport_procedure transport_fn[MQTT_TRANSPORT_NUM] = {
 		mqtt_client_tls_disconnect,
 	},
 #endif /* CONFIG_MQTT_LIB_TLS */
-#if defined(CONFIG_MQTT_LIB_SOCKS)
+#if defined(CONFIG_MQTT_LIB_WEBSOCKET)
 	{
-		mqtt_client_socks5_connect,
-		mqtt_client_tcp_write,
-		mqtt_client_tcp_read,
-		mqtt_client_tcp_disconnect,
+		mqtt_client_websocket_connect,
+		mqtt_client_websocket_write,
+		mqtt_client_websocket_read,
+		mqtt_client_websocket_disconnect,
 	},
-#endif /* CONFIG_MQTT_LIB_SOCKS */
+#if defined(CONFIG_MQTT_LIB_TLS)
+	{
+		mqtt_client_websocket_connect,
+		mqtt_client_websocket_write,
+		mqtt_client_websocket_read,
+		mqtt_client_websocket_disconnect,
+	},
+#endif /* CONFIG_MQTT_LIB_TLS */
+#endif /* CONFIG_MQTT_LIB_WEBSOCKET */
 };
 
 int mqtt_transport_connect(struct mqtt_client *client)

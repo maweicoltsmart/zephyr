@@ -6,12 +6,12 @@
 
 #include <device.h>
 #include <soc.h>
-#include <dma.h>
+#include <drivers/dma.h>
 
 #include <logging/log.h>
 LOG_MODULE_REGISTER(dma_sam0, CONFIG_DMA_LOG_LEVEL);
 
-#define DMA_REGS	((Dmac *)DT_ATMEL_SAM0_DMAC_0_BASE_ADDRESS)
+#define DMA_REGS	((Dmac *)DT_INST_0_ATMEL_SAM0_DMAC_BASE_ADDRESS)
 
 typedef void (*dma_callback)(void *callback_arg, u32_t channel,
 			     int error_code);
@@ -356,14 +356,51 @@ inval:
 	return -EINVAL;
 }
 
+static int dma_sam0_get_status(struct device *dev, u32_t channel,
+			       struct dma_status *stat)
+{
+	struct dma_sam0_data *data = DEV_DATA(dev);
+	u32_t act;
+
+	if (channel >= DMAC_CH_NUM || stat == NULL) {
+		return -EINVAL;
+	}
+
+	act = DMA_REGS->ACTIVE.reg;
+	if ((act & DMAC_ACTIVE_ABUSY) &&
+	    ((act & DMAC_ACTIVE_ID_Msk) >> DMAC_ACTIVE_ID_Pos) == channel) {
+		stat->busy = true;
+		stat->pending_length = (act & DMAC_ACTIVE_BTCNT_Msk) >>
+				       DMAC_ACTIVE_BTCNT_Pos;
+	} else {
+		stat->busy = false;
+		stat->pending_length = data->descriptors_wb[channel].BTCNT.reg;
+	}
+
+	switch (data->descriptors[channel].BTCTRL.bit.BEATSIZE) {
+	case DMAC_BTCTRL_BEATSIZE_BYTE_Val:
+		break;
+	case DMAC_BTCTRL_BEATSIZE_HWORD_Val:
+		stat->pending_length *= 2U;
+		break;
+	case DMAC_BTCTRL_BEATSIZE_WORD_Val:
+		stat->pending_length *= 4U;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 DEVICE_DECLARE(dma_sam0_0);
 
 #define DMA_SAM0_IRQ_CONNECT(n)						 \
 	do {								 \
-		IRQ_CONNECT(DT_ATMEL_SAM0_DMAC_0_IRQ_ ## n,		 \
-			    DT_ATMEL_SAM0_DMAC_0_IRQ_ ## n ## _PRIORITY, \
+		IRQ_CONNECT(DT_INST_0_ATMEL_SAM0_DMAC_IRQ_ ## n,		 \
+			    DT_INST_0_ATMEL_SAM0_DMAC_IRQ_ ## n ## _PRIORITY, \
 			    dma_sam0_isr, DEVICE_GET(dma_sam0_0), 0);	 \
-		irq_enable(DT_ATMEL_SAM0_DMAC_0_IRQ_ ## n);		 \
+		irq_enable(DT_INST_0_ATMEL_SAM0_DMAC_IRQ_ ## n);		 \
 	} while (0)
 
 static int dma_sam0_init(struct device *dev)
@@ -390,19 +427,19 @@ static int dma_sam0_init(struct device *dev)
 	/* Enable the unit and enable all priorities */
 	DMA_REGS->CTRL.reg = DMAC_CTRL_DMAENABLE | DMAC_CTRL_LVLEN(0x0F);
 
-#ifdef DT_ATMEL_SAM0_DMAC_0_IRQ_0
+#ifdef DT_INST_0_ATMEL_SAM0_DMAC_IRQ_0
 	DMA_SAM0_IRQ_CONNECT(0);
 #endif
-#ifdef DT_ATMEL_SAM0_DMAC_0_IRQ_1
+#ifdef DT_INST_0_ATMEL_SAM0_DMAC_IRQ_1
 	DMA_SAM0_IRQ_CONNECT(1);
 #endif
-#ifdef DT_ATMEL_SAM0_DMAC_0_IRQ_2
+#ifdef DT_INST_0_ATMEL_SAM0_DMAC_IRQ_2
 	DMA_SAM0_IRQ_CONNECT(2);
 #endif
-#ifdef DT_ATMEL_SAM0_DMAC_0_IRQ_3
+#ifdef DT_INST_0_ATMEL_SAM0_DMAC_IRQ_3
 	DMA_SAM0_IRQ_CONNECT(3);
 #endif
-#ifdef DT_ATMEL_SAM0_DMAC_0_IRQ_4
+#ifdef DT_INST_0_ATMEL_SAM0_DMAC_IRQ_4
 	DMA_SAM0_IRQ_CONNECT(4);
 #endif
 
@@ -416,6 +453,7 @@ static const struct dma_driver_api dma_sam0_api = {
 	.start = dma_sam0_start,
 	.stop = dma_sam0_stop,
 	.reload = dma_sam0_reload,
+	.get_status = dma_sam0_get_status,
 };
 
 DEVICE_AND_API_INIT(dma_sam0_0, CONFIG_DMA_0_NAME, &dma_sam0_init,

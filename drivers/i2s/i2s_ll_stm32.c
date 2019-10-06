@@ -5,11 +5,11 @@
  */
 
 #include <string.h>
-#include <dma.h>
-#include <i2s.h>
+#include <drivers/dma.h>
+#include <drivers/i2s.h>
 #include <soc.h>
 #include <clock_control/stm32_clock_control.h>
-#include <clock_control.h>
+#include <drivers/clock_control.h>
 
 #include "i2s_ll_stm32.h"
 #include <logging/log.h>
@@ -609,7 +609,7 @@ static void i2s_stm32_isr(void *arg)
 	struct i2s_stm32_data *const dev_data = DEV_DATA(dev);
 	struct stream *stream = &dev_data->rx;
 
-	LOG_ERR("%s: err=%d", __func__, LL_I2S_ReadReg(cfg->i2s, SR));
+	LOG_ERR("%s: err=%d", __func__, (int)LL_I2S_ReadReg(cfg->i2s, SR));
 	stream->state = I2S_STATE_ERROR;
 
 	/* OVR error must be explicitly cleared */

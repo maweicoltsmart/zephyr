@@ -14,7 +14,7 @@ static u8_t test_rwbs = 1U;
 
 static int write_handler(void *ctx, off_t off, char const *buf, size_t len)
 {
-	zassert_equal(ctx, (void *)ENC_CTX_VAL, "bad write calback context\n");
+	zassert_equal(ctx, (void *)ENC_CTX_VAL, "bad write callback context\n");
 
 	if (off % test_rwbs || len % test_rwbs) {
 		return -EIO;
@@ -74,7 +74,7 @@ static int read_handle(void *ctx, off_t off, char *buf, size_t *len)
 {
 	int r_len;
 
-	zassert_equal(ctx, (void *)ENC_CTX_VAL, "bad write calback context\n");
+	zassert_equal(ctx, (void *)ENC_CTX_VAL, "bad write callback context\n");
 
 	if (off % test_rwbs || *len % test_rwbs) {
 		return -EIO;
@@ -93,7 +93,7 @@ static int read_handle(void *ctx, off_t off, char *buf, size_t *len)
 
 char read_buf[128+10];
 
-void test_raw_read_iteration(u8_t rbs, size_t off, size_t len)
+static void test_raw_read_iteration(u8_t rbs, size_t off, size_t len)
 {
 	test_rwbs = rbs;
 	size_t len_read;
@@ -145,9 +145,10 @@ void test_setting_raw_read(void)
 
 
 
-void test_val_read_iteration(char const *src, size_t src_len,
-			     char const *pattern, size_t pattern_len,
-			     size_t len, u8_t rbs, size_t off, size_t val_off)
+static void test_val_read_iteration(char const *src, size_t src_len,
+				    char const *pattern, size_t pattern_len,
+				    size_t len, u8_t rbs, size_t off,
+				    size_t val_off)
 {
 	size_t len_read;
 	int rc;

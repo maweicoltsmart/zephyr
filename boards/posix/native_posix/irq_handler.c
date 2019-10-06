@@ -18,7 +18,7 @@
 #include "board_soc.h"
 #include "sw_isr_table.h"
 #include "soc.h"
-#include <tracing.h>
+#include <debug/tracing.h>
 
 typedef void (*normal_irq_f_ptr)(void *);
 typedef int (*direct_irq_f_ptr)(void);
@@ -30,12 +30,6 @@ static int currently_running_irq = -1;
 
 static inline void vector_to_irq(int irq_nbr, int *may_swap)
 {
-	/*
-	 * As in this architecture an irq (code) executes in 0 time,
-	 * it is a bit senseless to call z_int_latency_start/stop()
-	 */
-	/* z_int_latency_start(); */
-
 	sys_trace_isr_enter();
 
 	if (irq_vector_table[irq_nbr].func == NULL) { /* LCOV_EXCL_BR_LINE */
@@ -59,7 +53,6 @@ static inline void vector_to_irq(int irq_nbr, int *may_swap)
 	}
 
 	sys_trace_isr_exit();
-	/* z_int_latency_stop(); */
 }
 
 /**
@@ -270,6 +263,30 @@ void z_irq_priority_set(unsigned int irq, unsigned int prio, uint32_t flags)
 	hw_irq_ctrl_prio_set(irq, prio);
 }
 
+#ifdef CONFIG_DYNAMIC_INTERRUPTS
+/**
+ * Configure a dynamic interrupt.
+ *
+ * Use this instead of IRQ_CONNECT() if arguments cannot be known at build time.
+ *
+ * @param irq IRQ line number
+ * @param priority Interrupt priority
+ * @param routine Interrupt service routine
+ * @param parameter ISR parameter
+ * @param flags Arch-specific IRQ configuration flags
+ *
+ * @return The vector assigned to this interrupt
+ */
+int z_arch_irq_connect_dynamic(unsigned int irq, unsigned int priority,
+			     void (*routine)(void *parameter), void *parameter,
+			     u32_t flags)
+{
+	z_isr_declare(irq, (int)flags, routine, parameter);
+	z_irq_priority_set(irq, priority, flags);
+	return irq;
+}
+#endif /* CONFIG_DYNAMIC_INTERRUPTS */
+
 /**
  * Similar to ARM's NVIC_SetPendingIRQ
  * set a pending IRQ from SW
@@ -312,7 +329,7 @@ static void offload_sw_irq_handler(void *a)
  *
  * Raise the SW IRQ assigned to handled this
  */
-void irq_offload(irq_offload_routine_t routine, void *parameter)
+void z_arch_irq_offload(irq_offload_routine_t routine, void *parameter)
 {
 	off_routine = routine;
 	off_parameter = parameter;

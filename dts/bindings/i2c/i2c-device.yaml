@@ -1,32 +1,14 @@
-#
 # Copyright (c) 2017, Linaro Limited
-#
 # SPDX-License-Identifier: Apache-2.0
-#
----
-title: I2C Device Base Structure
-version: 0.1
 
-description: >
-    This binding gives the base structures for all i2c devices
+# Common fields for I2C devices
 
-parent:
-    bus: i2c
+include: base.yaml
+
+parent-bus: i2c
 
 properties:
-    compatible:
-      type: string
-      category: required
-      description: compatible strings
-      generation: define
     reg:
-      type: array
-      description: address on i2c bus
-      generation: define
-      category: required
+      required: true
     label:
-      type: string
-      category: required
-      description: Human readable string describing the device (used by Zephyr for API name)
-      generation: define
-...
+      required: true

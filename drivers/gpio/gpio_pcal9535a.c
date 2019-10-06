@@ -13,9 +13,9 @@
 #include <kernel.h>
 #include <device.h>
 #include <init.h>
-#include <misc/util.h>
-#include <gpio.h>
-#include <i2c.h>
+#include <sys/util.h>
+#include <drivers/gpio.h>
+#include <drivers/i2c.h>
 
 #include "gpio_pcal9535a.h"
 
@@ -60,10 +60,11 @@ static inline int has_i2c_master(struct device *dev)
 		(struct gpio_pcal9535a_drv_data * const)dev->driver_data;
 	struct device * const i2c_master = drv_data->i2c_master;
 
-	if (i2c_master)
+	if (i2c_master) {
 		return 1;
-	else
+	} else {
 		return 0;
+	}
 }
 
 /**
@@ -128,12 +129,16 @@ static int write_port_regs(struct device *dev, u8_t reg,
 		"0x%X", i2c_addr, reg, buf->byte[0], (reg + 1),
 		buf->byte[1]);
 
-	ret = i2c_burst_write(i2c_master, i2c_addr, reg, buf->byte, 2);
+	ret = i2c_reg_write_byte(i2c_master, i2c_addr, reg, buf->byte[0]);
 	if (ret) {
 		LOG_ERR("PCAL9535A[0x%X]: error writing from register 0x%X "
 			"(%d)", i2c_addr, reg, ret);
 	}
-
+	ret = i2c_reg_write_byte(i2c_master, i2c_addr, reg+1, buf->byte[1]);
+	if (ret) {
+		LOG_ERR("PCAL9535A[0x%X]: error writing from register 0x%X "
+				"(%d)", i2c_addr, reg, ret);
+	}
 	return ret;
 }
 

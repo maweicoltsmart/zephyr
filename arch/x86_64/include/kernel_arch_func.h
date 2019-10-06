@@ -9,7 +9,7 @@
 #include <irq.h>
 #include <xuk-switch.h>
 
-static inline void kernel_arch_init(void)
+static inline void z_arch_kernel_init(void)
 {
 	/* This is a noop, we already took care of things before
 	 * z_cstart() is entered
@@ -42,7 +42,16 @@ static inline void z_arch_irq_unlock(unsigned int key)
 	}
 }
 
-static inline void arch_nop(void)
+/**
+ * Returns true if interrupts were unlocked prior to the
+ * z_arch_irq_lock() call that produced the key argument.
+ */
+static inline bool z_arch_irq_unlocked(unsigned int key)
+{
+	return (key & 0x200) != 0;
+}
+
+static inline void z_arch_nop(void)
 {
 	__asm__ volatile("nop");
 }
@@ -69,7 +78,7 @@ static inline unsigned int z_arch_k_cycle_get_32(void)
 #endif
 }
 
-#define z_is_in_isr() (z_arch_curr_cpu()->nested != 0)
+#define z_arch_is_in_isr() (z_arch_curr_cpu()->nested != 0)
 
 static inline void z_arch_switch(void *switch_to, void **switched_from)
 {

@@ -8,8 +8,8 @@
 #include <st/f4/stm32f415Rg.dtsi>
 
 / {
-	model = "STMicroelectronics Mikroe MINI-M4 for STM32 board";
-	compatible = "st,stm32f415-mikroe-f415rg", "st,stm32f415";
+	model = "Mikroe MINI-M4 for STM32 board";
+	compatible = "mikroe,mini-m4-for-stm32", "st,stm32f415rg";
 
 	chosen {
 		zephyr,console = &usart2;
@@ -41,25 +41,25 @@
 	current-speed = <115200>;
 	pinctrl-0 = <&usart2_pins_a>;
 	pinctrl-names = "default";
-	status = "ok";
+	status = "okay";
 };
 
 &i2c2 {
-	status = "ok";
+	status = "okay";
 };
 
 &spi1 {
-	status = "ok";
+	status = "okay";
 };
 
 &timers3 {
-	status = "ok";
+	status = "okay";
 
 	pwm {
-		status = "ok";
+		status = "okay";
 	};
 };
 
 &usbotg_fs {
-	status = "ok";
+	status = "okay";
 };

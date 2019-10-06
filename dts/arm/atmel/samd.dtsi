@@ -13,20 +13,19 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 
-		cpu@0 {
+		cpu0: cpu@0 {
 			device_type = "cpu";
-			compatible = "arm,cortex-m0";
+			compatible = "arm,cortex-m0+";
 			reg = <0>;
 		};
 	};
 
 	sram0: memory@20000000 {
-		device_type = "memory";
 		compatible = "mmio-sram";
 		reg = <0x20000000 0x8000>;
 	};
 
-	id: device_id@0 {
+	id: device_id@80a00c {
 		compatible = "atmel,sam0-id";
 		reg =	<0x0080A00C 0x4>,
 			<0x0080A040 0x4>,
@@ -47,6 +46,8 @@
 		sercom-3 = &sercom3;
 		sercom-4 = &sercom4;
 		sercom-5 = &sercom5;
+
+		tc-4 = &tc4;
 	};
 
 	soc {
@@ -135,6 +136,12 @@
 			label = "SERCOM5";
 		};
 
+		tc4: tc@42003000 {
+			compatible = "atmel,sam0-tc32";
+			reg = <0x42003000 0x20>;
+			label = "TIMER_4";
+		};
+
 		porta: gpio@41004400 {
 			compatible = "atmel,sam0-gpio";
 			reg = <0x41004400 0x80>;
@@ -171,6 +178,7 @@
 			 */
 			gclk = <3>;
 			prescaler = <4>;
+			#io-channel-cells = <1>;
 		};
 	};
 };

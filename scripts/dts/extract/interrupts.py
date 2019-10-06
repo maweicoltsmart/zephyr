@@ -4,6 +4,12 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+# NOTE: This file is part of the old device tree scripts, which will be removed
+# later. They are kept to generate some legacy #defines via the
+# --deprecated-only flag.
+#
+# The new scripts are gen_defines.py, edtlib.py, and dtlib.py.
+
 from extract.globals import *
 from extract.directive import DTDirective
 
@@ -22,6 +28,8 @@ class DTInterrupts(DTDirective):
     #                  compatible definition.
     #
     def extract(self, node_path, prop, names, def_label):
+        if prop == "interrupts-extended":
+            return
         vals = reduced[node_path]['props'][prop]
         if not isinstance(vals, list):
             vals = [vals]
@@ -47,7 +55,12 @@ class DTInterrupts(DTDirective):
             l_cell_prefix = ['IRQ']
 
             for i in range(reduced[irq_parent]['props']['#interrupt-cells']):
-                l_cell_name = [cell_yaml['#cells'][i].upper()]
+                if "interrupt-cells" in cell_yaml:
+                    cell_yaml_name = "interrupt-cells"
+                else:
+                    cell_yaml_name = "#cells"
+
+                l_cell_name = [cell_yaml[cell_yaml_name][i].upper()]
                 if l_cell_name == l_cell_prefix:
                     l_cell_name = []
 
@@ -69,9 +82,26 @@ class DTInterrupts(DTDirective):
                         node_path,
                         lambda alias:
                             '_'.join([str_to_label(alias)] +
-                                     l_cell_prefix + name + l_cell_name),
+                                     l_cell_prefix + l_idx + l_cell_name),
                         full_name,
                         prop_alias)
+
+                    if name:
+                        add_prop_aliases(
+                            node_path,
+                            lambda alias:
+                                '_'.join([str_to_label(alias)] +
+                                         l_cell_prefix + name + l_cell_name),
+                            full_name,
+                            prop_alias)
+                    else:
+                        add_prop_aliases(
+                            node_path,
+                            lambda alias:
+                                '_'.join([str_to_label(alias)] +
+                                         l_cell_prefix + name + l_cell_name),
+                            full_name,
+                            prop_alias, True)
 
             index += 1
             insert_defs(node_path, prop_def, prop_alias)

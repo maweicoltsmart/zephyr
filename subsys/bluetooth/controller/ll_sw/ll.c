@@ -10,7 +10,7 @@
 
 #include <soc.h>
 #include <device.h>
-#include <clock_control.h>
+#include <drivers/clock_control.h>
 #ifdef CONFIG_CLOCK_CONTROL_NRF
 #include <drivers/clock_control/nrf_clock_control.h>
 #endif
@@ -127,12 +127,12 @@ int ll_init(struct k_sem *sem_rx)
 
 	sem_recv = sem_rx;
 
-	clk_k32 = device_get_binding(DT_NORDIC_NRF_CLOCK_0_LABEL "_32K");
+	clk_k32 = device_get_binding(DT_INST_0_NORDIC_NRF_CLOCK_LABEL "_32K");
 	if (!clk_k32) {
 		return -ENODEV;
 	}
 
-	clock_control_on(clk_k32, (void *)CLOCK_CONTROL_NRF_K32SRC);
+	clock_control_on(clk_k32, NULL);
 
 	entropy = device_get_binding(CONFIG_ENTROPY_NAME);
 	if (!entropy) {
@@ -158,7 +158,7 @@ int ll_init(struct k_sem *sem_rx)
 			  hal_ticker_instance0_trigger_set);
 	LL_ASSERT(!err);
 
-	clk_m16 = device_get_binding(DT_NORDIC_NRF_CLOCK_0_LABEL "_16M");
+	clk_m16 = device_get_binding(DT_INST_0_NORDIC_NRF_CLOCK_LABEL "_16M");
 	if (!clk_m16) {
 		return -ENODEV;
 	}
@@ -180,16 +180,16 @@ int ll_init(struct k_sem *sem_rx)
 		ll_filter_reset(true);
 	}
 
-	IRQ_DIRECT_CONNECT(NRF5_IRQ_RADIO_IRQn, CONFIG_BT_CTLR_WORKER_PRIO,
+	IRQ_DIRECT_CONNECT(RADIO_IRQn, CONFIG_BT_CTLR_WORKER_PRIO,
 			   radio_nrf5_isr, 0);
-	IRQ_CONNECT(NRF5_IRQ_RTC0_IRQn, CONFIG_BT_CTLR_WORKER_PRIO,
+	IRQ_CONNECT(RTC0_IRQn, CONFIG_BT_CTLR_WORKER_PRIO,
 		    rtc0_nrf5_isr, NULL, 0);
-	IRQ_CONNECT(NRF5_IRQ_SWI5_IRQn, CONFIG_BT_CTLR_JOB_PRIO, swi5_nrf5_isr,
-		    NULL, 0);
+	IRQ_CONNECT(SWI5_IRQn, CONFIG_BT_CTLR_JOB_PRIO,
+		    swi5_nrf5_isr, NULL, 0);
 
-	irq_enable(NRF5_IRQ_RADIO_IRQn);
-	irq_enable(NRF5_IRQ_RTC0_IRQn);
-	irq_enable(NRF5_IRQ_SWI5_IRQn);
+	irq_enable(RADIO_IRQn);
+	irq_enable(RTC0_IRQn);
+	irq_enable(SWI5_IRQn);
 
 	return 0;
 }

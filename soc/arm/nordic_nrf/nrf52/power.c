@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <zephyr.h>
-#include <power.h>
-#include <nrf_power.h>
+#include <power/power.h>
+#include <hal/nrf_power.h>
 
 #include <logging/log.h>
 LOG_MODULE_DECLARE(soc, CONFIG_SOC_LOG_LEVEL);
@@ -22,7 +22,7 @@ void sys_set_power_state(enum power_states state)
  #endif
 #endif
 	default:
-		LOG_ERR("Unsupported power state %u", state);
+		LOG_DBG("Unsupported power state %u", state);
 		break;
 	}
 }
@@ -39,7 +39,7 @@ void _sys_pm_power_state_exit_post_ops(enum power_states state)
  #endif
 #endif
 	default:
-		LOG_ERR("Unsupported power state %u", state);
+		LOG_DBG("Unsupported power state %u", state);
 		break;
 	}
 
@@ -49,4 +49,3 @@ void _sys_pm_power_state_exit_post_ops(enum power_states state)
 	 */
 	irq_unlock(0);
 }
-

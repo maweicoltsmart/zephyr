@@ -53,13 +53,36 @@
 	};
 };
 
+&trng {
+	status = "okay";
+};
+
 &gpio0 {
-	status = "ok";
+	status = "okay";
 };
 
 &uart0 {
-	status = "ok";
+	status = "okay";
 	current-speed = <115200>;
 	tx-pin = <13>;
 	rx-pin = <12>;
+};
+
+&i2c0 {
+	status = "okay";
+	scl-pin = <4>;
+	sda-pin = <5>;
+};
+
+&spi0 {
+	status = "okay";
+	sck-pin = <10>;
+	mosi-pin = <9>;
+	miso-pin = <8>;
+	cs-pin = <11>;
+	cs-gpios = <&gpio0 11 0>;
+};
+
+&rtc {
+	status = "okay";
 };

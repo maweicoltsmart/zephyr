@@ -72,13 +72,9 @@ add_custom_target(code_data_relocation_target)
 # and its associated variables, e.g. PROJECT_SOURCE_DIR.
 # It is recommended to always use ZEPHYR_BASE instead of PROJECT_SOURCE_DIR
 # when trying to reference ENV${ZEPHYR_BASE}.
-set(PROJECT_SOURCE_DIR $ENV{ZEPHYR_BASE})
 
-# Convert path to use the '/' separator
-string(REPLACE "\\" "/" PROJECT_SOURCE_DIR ${PROJECT_SOURCE_DIR})
-
-# Remove trailing '/', it results in ugly paths and also exposes some bugs
-string(REGEX REPLACE "\/+$" "" PROJECT_SOURCE_DIR ${PROJECT_SOURCE_DIR})
+# Note any later project() resets PROJECT_SOURCE_DIR
+file(TO_CMAKE_PATH "$ENV{ZEPHYR_BASE}" PROJECT_SOURCE_DIR)
 
 set(ZEPHYR_BINARY_DIR ${PROJECT_BINARY_DIR})
 set(ZEPHYR_BASE ${PROJECT_SOURCE_DIR})
@@ -117,6 +113,9 @@ add_custom_target(
   COMMAND ${CMAKE_COMMAND} -P ${ZEPHYR_BASE}/cmake/pristine.cmake
   # Equivalent to rm -rf build/*
   )
+
+# Dummy add to generate files.
+zephyr_linker_sources(SECTIONS)
 
 # The BOARD can be set by 3 sources. Through environment variables,
 # through the cmake CLI, and through CMakeLists.txt.
@@ -299,6 +298,7 @@ foreach(root ${BOARD_ROOT})
       list(FIND SHIELD_LIST ${s} _idx)
       if (NOT _idx EQUAL -1)
         list(GET shields_refs_list ${_idx} s_path)
+        get_filename_component(s_dir ${s_path} DIRECTORY)
 
         # if shield config flag is on, add shield overlay to the shield overlays
         # list and dts_fixup file to the shield fixup file
@@ -308,8 +308,53 @@ foreach(root ${BOARD_ROOT})
         )
         list(APPEND
           shield_dts_fixups
-          ${shield_dir}/${s}/dts_fixup.h
+          ${shield_dir}/${s_dir}/dts_fixup.h
         )
+
+        # search for shield/boards/board.overlay file
+        if(EXISTS ${shield_dir}/${s_dir}/boards/${BOARD}.overlay)
+          # add shield/board overlay to the shield overlays list
+          list(APPEND
+            shield_dts_files
+            ${shield_dir}/${s_dir}/boards/${BOARD}.overlay
+          )
+        endif()
+
+        # search for shield/boards/shield/board.overlay file
+        if(EXISTS ${shield_dir}/${s_dir}/boards/${s}/${BOARD}.overlay)
+          # add shield/board overlay to the shield overlays list
+          list(APPEND
+            shield_dts_files
+            ${shield_dir}/${s_dir}/boards/${s}/${BOARD}.overlay
+          )
+        endif()
+
+        # search for shield/shield.conf file
+        if(EXISTS ${shield_dir}/${s_dir}/${s}.conf)
+          # add shield.conf to the shield config list
+          list(APPEND
+            shield_conf_files
+            ${shield_dir}/${s_dir}/${s}.conf
+          )
+        endif()
+
+        # search for shield/boards/board.conf file
+        if(EXISTS ${shield_dir}/${s_dir}/boards/${BOARD}.conf)
+          # add HW specific board.conf to the shield config list
+          list(APPEND
+            shield_conf_files
+            ${shield_dir}/${s_dir}/boards/${BOARD}.conf
+          )
+        endif()
+
+        # search for shield/boards/shield/board.conf file
+        if(EXISTS ${shield_dir}/${s_dir}/boards/${s}/${BOARD}.conf)
+          # add HW specific board.conf to the shield config list
+          list(APPEND
+            shield_conf_files
+            ${shield_dir}/${s_dir}/boards/${s}/${BOARD}.conf
+          )
+        endif()
       else()
         list(APPEND NOT_FOUND_SHIELD_LIST ${s})
       endif()
@@ -363,14 +408,26 @@ the configuration settings specified in an alternate .conf file using this param
 These settings will override the settings in the application’s .config file or its default .conf file.\
 Multiple files may be listed, e.g. CONF_FILE=\"prj1.conf prj2.conf\"")
 
+if(ZEPHYR_EXTRA_MODULES)
+  # ZEPHYR_EXTRA_MODULES has either been specified on the cmake CLI or is
+  # already in the CMakeCache.txt. This has precedence over the environment
+  # variable ZEPHYR_EXTRA_MODULES
+elseif(DEFINED ENV{ZEPHYR_EXTRA_MODULES})
+  set(ZEPHYR_EXTRA_MODULES $ENV{ZEPHYR_EXTRA_MODULES})
+endif()
+
 if(DTC_OVERLAY_FILE)
   # DTC_OVERLAY_FILE has either been specified on the cmake CLI or is already
   # in the CMakeCache.txt. This has precedence over the environment
   # variable DTC_OVERLAY_FILE
 elseif(DEFINED ENV{DTC_OVERLAY_FILE})
   set(DTC_OVERLAY_FILE $ENV{DTC_OVERLAY_FILE})
+elseif(EXISTS          ${APPLICATION_SOURCE_DIR}/boards/${BOARD}.overlay)
+  set(DTC_OVERLAY_FILE ${APPLICATION_SOURCE_DIR}/boards/${BOARD}.overlay)
 elseif(EXISTS          ${APPLICATION_SOURCE_DIR}/${BOARD}.overlay)
   set(DTC_OVERLAY_FILE ${APPLICATION_SOURCE_DIR}/${BOARD}.overlay)
+elseif(EXISTS          ${APPLICATION_SOURCE_DIR}/app.overlay)
+  set(DTC_OVERLAY_FILE ${APPLICATION_SOURCE_DIR}/app.overlay)
 endif()
 
 set(DTC_OVERLAY_FILE ${DTC_OVERLAY_FILE} CACHE STRING "If desired, you can \
@@ -414,6 +471,15 @@ else()
 endif()
 
 include(${ZEPHYR_BASE}/cmake/target_toolchain.cmake)
+
+project(Zephyr-Kernel VERSION ${PROJECT_VERSION})
+enable_language(C CXX ASM)
+
+# 'project' sets PROJECT_BINARY_DIR to ${CMAKE_CURRENT_BINARY_DIR},
+# but for legacy reasons we need it to be set to
+# ${CMAKE_CURRENT_BINARY_DIR}/zephyr
+set(PROJECT_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/zephyr)
+set(PROJECT_SOURCE_DIR ${ZEPHYR_BASE})
 
 set(KERNEL_NAME ${CONFIG_KERNEL_BIN_NAME})
 

@@ -15,7 +15,7 @@
 #include <linker/sections.h>
 #include <string.h>
 #include <wait_q.h>
-#include <misc/dlist.h>
+#include <sys/dlist.h>
 #include <init.h>
 
 #if (CONFIG_NUM_MBOX_ASYNC_MSGS > 0)
@@ -32,19 +32,16 @@ K_STACK_DEFINE(async_msg_free, CONFIG_NUM_MBOX_ASYNC_MSGS);
 /* allocate an asynchronous message descriptor */
 static inline void mbox_async_alloc(struct k_mbox_async **async)
 {
-	(void)k_stack_pop(&async_msg_free, (u32_t *)async, K_FOREVER);
+	(void)k_stack_pop(&async_msg_free, (stack_data_t *)async, K_FOREVER);
 }
 
 /* free an asynchronous message descriptor */
 static inline void mbox_async_free(struct k_mbox_async *async)
 {
-	k_stack_push(&async_msg_free, (u32_t)async);
+	k_stack_push(&async_msg_free, (stack_data_t)async);
 }
 
 #endif /* CONFIG_NUM_MBOX_ASYNC_MSGS > 0 */
-
-extern struct k_mbox _k_mbox_list_start[];
-extern struct k_mbox _k_mbox_list_end[];
 
 #ifdef CONFIG_OBJECT_TRACING
 struct k_mbox *_trace_list_k_mbox;
@@ -80,16 +77,14 @@ static int init_mbox_module(struct device *dev)
 
 	for (i = 0; i < CONFIG_NUM_MBOX_ASYNC_MSGS; i++) {
 		z_init_thread_base(&async_msg[i].thread, 0, _THREAD_DUMMY, 0);
-		k_stack_push(&async_msg_free, (u32_t)&async_msg[i]);
+		k_stack_push(&async_msg_free, (stack_data_t)&async_msg[i]);
 	}
 #endif /* CONFIG_NUM_MBOX_ASYNC_MSGS > 0 */
 
 	/* Complete initialization of statically defined mailboxes. */
 
 #ifdef CONFIG_OBJECT_TRACING
-	struct k_mbox *mbox;
-
-	for (mbox = _k_mbox_list_start; mbox < _k_mbox_list_end; mbox++) {
+	Z_STRUCT_SECTION_FOREACH(k_mbox, mbox) {
 		SYS_TRACING_OBJ_INIT(k_mbox, mbox);
 	}
 #endif /* CONFIG_OBJECT_TRACING */
@@ -216,7 +211,7 @@ static void mbox_message_dispose(struct k_mbox_msg *rx_msg)
 #endif
 
 	/* synchronous send: wake up sending thread */
-	z_set_thread_return_value(sending_thread, 0);
+	z_arch_thread_return_value_set(sending_thread, 0);
 	z_mark_thread_as_not_pending(sending_thread);
 	z_ready_thread(sending_thread);
 	z_reschedule_unlocked();
@@ -262,7 +257,7 @@ static int mbox_message_put(struct k_mbox *mbox, struct k_mbox_msg *tx_msg,
 			z_unpend_thread(receiving_thread);
 
 			/* ready receiver for execution */
-			z_set_thread_return_value(receiving_thread, 0);
+			z_arch_thread_return_value_set(receiving_thread, 0);
 			z_ready_thread(receiving_thread);
 
 #if (CONFIG_NUM_MBOX_ASYNC_MSGS > 0)

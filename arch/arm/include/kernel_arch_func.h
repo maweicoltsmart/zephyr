@@ -27,19 +27,20 @@ extern "C" {
 #endif
 
 #ifndef _ASMLANGUAGE
-extern void z_FaultInit(void);
-extern void z_CpuIdleInit(void);
+extern void z_arm_fault_init(void);
+extern void z_arm_cpu_idle_init(void);
 #ifdef CONFIG_ARM_MPU
-extern void z_arch_configure_static_mpu_regions(void);
-extern void z_arch_configure_dynamic_mpu_regions(struct k_thread *thread);
+extern void z_arm_configure_static_mpu_regions(void);
+extern void z_arm_configure_dynamic_mpu_regions(struct k_thread *thread);
 #endif /* CONFIG_ARM_MPU */
 
-static ALWAYS_INLINE void kernel_arch_init(void)
+static ALWAYS_INLINE void z_arch_kernel_init(void)
 {
-	z_InterruptStackSetup();
-	z_ExcSetup();
-	z_FaultInit();
-	z_CpuIdleInit();
+	z_arm_interrupt_stack_setup();
+	z_arm_exc_setup();
+	z_arm_fault_init();
+	z_arm_cpu_idle_init();
+	z_arm_clear_faults();
 }
 
 static ALWAYS_INLINE void
@@ -47,13 +48,18 @@ z_arch_switch_to_main_thread(struct k_thread *main_thread,
 			    k_thread_stack_t *main_stack,
 			    size_t main_stack_size, k_thread_entry_t _main)
 {
-#if defined(CONFIG_FLOAT) && !defined(CONFIG_FP_SHARING)
+#if defined(CONFIG_FLOAT)
 	/* Initialize the Floating Point Status and Control Register when in
 	 * Unshared FP Registers mode (In Shared FP Registers mode, FPSCR is
 	 * initialized at thread creation for threads that make use of the FP).
 	 */
 	__set_FPSCR(0);
-#endif
+#if defined(CONFIG_FP_SHARING)
+	/* In Sharing mode clearing FPSCR may set the CONTROL.FPCA flag. */
+	__set_CONTROL(__get_CONTROL() & (~(CONTROL_FPCA_Msk)));
+	__ISB();
+#endif /* CONFIG_FP_SHARING */
+#endif /* CONFIG_FLOAT */
 
 #ifdef CONFIG_ARM_MPU
 	/* Configure static memory map. This will program MPU regions,
@@ -62,29 +68,20 @@ z_arch_switch_to_main_thread(struct k_thread *main_thread,
 	 *
 	 * This function is invoked once, upon system initialization.
 	 */
-	z_arch_configure_static_mpu_regions();
+	z_arm_configure_static_mpu_regions();
 #endif
 
 	/* get high address of the stack, i.e. its start (stack grows down) */
 	char *start_of_main_stack;
 
-#if defined(CONFIG_MPU_REQUIRES_POWER_OF_TWO_ALIGNMENT) && \
-	defined(CONFIG_USERSPACE)
-	start_of_main_stack =
-		Z_THREAD_STACK_BUFFER(main_stack) + main_stack_size -
-		MPU_GUARD_ALIGN_AND_SIZE;
-#else
 	start_of_main_stack =
 		Z_THREAD_STACK_BUFFER(main_stack) + main_stack_size;
-#endif
+
 	start_of_main_stack = (char *)STACK_ROUND_DOWN(start_of_main_stack);
 
-#ifdef CONFIG_TRACING
-	z_sys_trace_thread_switched_out();
-#endif
 	_current = main_thread;
 #ifdef CONFIG_TRACING
-	z_sys_trace_thread_switched_in();
+	sys_trace_thread_switched_in();
 #endif
 
 	/* the ready queue cache already contains the main thread */
@@ -94,7 +91,7 @@ z_arch_switch_to_main_thread(struct k_thread *main_thread,
 	 * If stack protection is enabled, make sure to set it
 	 * before jumping to thread entry function
 	 */
-	z_arch_configure_dynamic_mpu_regions(main_thread);
+	z_arm_configure_dynamic_mpu_regions(main_thread);
 #endif
 
 #if defined(CONFIG_BUILTIN_STACK_GUARD)
@@ -112,8 +109,12 @@ z_arch_switch_to_main_thread(struct k_thread *main_thread,
 	 */
 	__asm__ volatile (
 	"mov   r0,  %0     \n\t"   /* Store _main in R0 */
+#if defined(CONFIG_CPU_CORTEX_M)
 	"msr   PSP, %1     \n\t"   /* __set_PSP(start_of_main_stack) */
-#if defined(CONFIG_ARMV6_M_ARMV8_M_BASELINE)
+#endif
+
+#if defined(CONFIG_ARMV6_M_ARMV8_M_BASELINE) \
+			|| defined(CONFIG_ARMV7_R)
 	"cpsie i           \n\t"   /* __enable_irq() */
 #elif defined(CONFIG_ARMV7_M_ARMV8_M_MAINLINE)
 	"cpsie if          \n\t"   /* __enable_irq(); __enable_fault_irq() */
@@ -135,19 +136,19 @@ z_arch_switch_to_main_thread(struct k_thread *main_thread,
 }
 
 static ALWAYS_INLINE void
-z_set_thread_return_value(struct k_thread *thread, unsigned int value)
+z_arch_thread_return_value_set(struct k_thread *thread, unsigned int value)
 {
 	thread->arch.swap_return_value = value;
 }
 
-extern void k_cpu_atomic_idle(unsigned int key);
-
-#define z_is_in_isr() z_IsInIsr()
+extern void z_arch_cpu_atomic_idle(unsigned int key);
 
 extern FUNC_NORETURN void z_arm_userspace_enter(k_thread_entry_t user_entry,
 					       void *p1, void *p2, void *p3,
 					       u32_t stack_end,
 					       u32_t stack_start);
+
+extern void z_arm_fatal_error(unsigned int reason, const z_arch_esf_t *esf);
 
 #endif /* _ASMLANGUAGE */
 

@@ -32,10 +32,9 @@ config MQTT_LIB_TLS
 	help
 	  Enable TLS support for socket MQTT Library
 
-config MQTT_LIB_SOCKS
-	bool "SOCKS proxy support for socket MQTT Library"
-	select SOCKS
+config MQTT_LIB_WEBSOCKET
+	bool "Websocket support for socket MQTT Library"
 	help
-	  Enable SOCKS proxy support for socket MQTT Library
+	  Enable Websocket support for socket MQTT Library.
 
 endif # MQTT_LIB

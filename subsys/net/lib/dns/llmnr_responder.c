@@ -68,6 +68,9 @@ static void create_ipv6_dst_addr(struct net_pkt *pkt,
 	struct net_udp_hdr *udp_hdr, hdr;
 
 	udp_hdr = net_udp_get_hdr(pkt, &hdr);
+	if (!udp_hdr) {
+		return;
+	}
 
 	addr->sin6_family = AF_INET6;
 	addr->sin6_port = udp_hdr->src_port;
@@ -186,20 +189,20 @@ static void add_question(struct net_buf *query, enum dns_rr_type qtype)
 		*prev = strlen(prev) - 1;
 	}
 
-	offset = DNS_MSG_HEADER_SIZE + query->len;
+	offset = DNS_MSG_HEADER_SIZE + query->len + 1;
 	UNALIGNED_PUT(htons(qtype), (u16_t *)(query->data+offset));
 
 	offset += DNS_QTYPE_LEN;
 	UNALIGNED_PUT(htons(DNS_CLASS_IN), (u16_t *)(query->data+offset));
 }
 
-static void add_answer(struct net_buf *query, u32_t ttl,
+static int add_answer(struct net_buf *query, u32_t ttl,
 		       u16_t addr_len, const u8_t *addr)
 {
-	const u16_t q_len = query->len + DNS_QTYPE_LEN + DNS_QCLASS_LEN;
+	const u16_t q_len = query->len + 1 + DNS_QTYPE_LEN + DNS_QCLASS_LEN;
 	u16_t offset = DNS_MSG_HEADER_SIZE + q_len;
 
-	memcpy(query->data + offset, query->data, q_len);
+	memcpy(query->data + offset, query->data + DNS_MSG_HEADER_SIZE, q_len);
 	offset += q_len;
 
 	UNALIGNED_PUT(htonl(ttl), query->data + offset);
@@ -209,6 +212,8 @@ static void add_answer(struct net_buf *query, u32_t ttl,
 	offset += DNS_RDLENGTH_LEN;
 
 	memcpy(query->data + offset, addr, addr_len);
+
+	return offset + addr_len;
 }
 
 static int create_answer(struct net_context *ctx,
@@ -233,11 +238,7 @@ static int create_answer(struct net_context *ctx,
 
 	add_question(query, qtype);
 
-	add_answer(query, LLMNR_TTL, addr_len, addr);
-
-	query->len += DNS_MSG_HEADER_SIZE +
-		(DNS_QTYPE_LEN + DNS_QCLASS_LEN) * 2 +
-		DNS_TTL_LEN + DNS_RDLENGTH_LEN + addr_len + query->len;
+	query->len = add_answer(query, LLMNR_TTL, addr_len, addr);
 
 	return 0;
 }
@@ -323,7 +324,6 @@ static int create_ipv4_answer(struct net_context *ctx,
 }
 #endif /* CONFIG_NET_IPV4 */
 
-#if defined(CONFIG_NET_IPV6)
 static int create_ipv6_answer(struct net_context *ctx,
 			      struct net_pkt *pkt,
 			      union net_ip_header *ip_hdr,
@@ -333,6 +333,7 @@ static int create_ipv6_answer(struct net_context *ctx,
 			      struct sockaddr *dst,
 			      socklen_t *dst_len)
 {
+#if defined(CONFIG_NET_IPV6)
 	const u8_t *addr;
 	int addr_len;
 
@@ -369,9 +370,9 @@ static int create_ipv6_answer(struct net_context *ctx,
 
 	net_context_set_ipv6_hop_limit(ctx, 255);
 
+#endif /* CONFIG_NET_IPV6 */
 	return 0;
 }
-#endif /* CONFIG_NET_IPV6 */
 
 static int send_response(struct net_context *ctx, struct net_pkt *pkt,
 			 union net_ip_header *ip_hdr, struct net_buf *reply,
@@ -486,8 +487,13 @@ static int dns_read(struct net_context *ctx,
 		/* If the query matches to our hostname, then send reply */
 		if (!strncasecmp(hostname, result->data + 1, hostname_len) &&
 		    (result->len - 1) >= hostname_len) {
-			NET_DBG("LLMNR query to our hostname %s", hostname);
-			send_response(ctx, pkt, ip_hdr, result, qtype, dns_id);
+			NET_DBG("LLMNR query to our hostname %s",
+				log_strdup(hostname));
+			ret = send_response(ctx, pkt, ip_hdr, result, qtype,
+					    dns_id);
+			if (ret < 0) {
+				NET_DBG("Cannot send response (%d)", ret);
+			}
 		}
 	} while (--queries);
 

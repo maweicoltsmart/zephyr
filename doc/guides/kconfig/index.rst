@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+.. SPDX-License-Identifier: Apache-2.0
 
 .. _kconfig_tips_and_tricks:
 
@@ -14,10 +14,10 @@ behaviors and features that might be cryptic or that are easily overlooked.
 
 .. note::
 
-   The official Kconfig documentation is `kconfig-language.txt
-   <https://raw.githubusercontent.com/torvalds/linux/master/Documentation/kbuild/kconfig-language.txt>`_
-   and `kconfig-macro-language.txt
-   <https://raw.githubusercontent.com/torvalds/linux/master/Documentation/kbuild/kconfig-macro-language.txt>`_.
+   The official Kconfig documentation is `kconfig-language.rst
+   <https://www.kernel.org/doc/html/latest/kbuild/kconfig-language.html>`_
+   and `kconfig-macro-language.rst
+   <https://www.kernel.org/doc/html/latest/kbuild/kconfig-macro-language.html>`_.
 
 
 What to turn into Kconfig options
@@ -326,6 +326,108 @@ error-prone, since it can be hard to spot that the same dependency is added
 twice.
 
 
+``depends on`` and ``string``/``int``/``hex`` symbols
+*****************************************************
+
+``depends on`` works not just for ``bool`` symbols, but also for ``string``,
+``int``, and ``hex`` symbols (and for choices).
+
+The Kconfig definitions below will hide the ``FOO_DEVICE_FREQUENCY`` symbol and
+disable any configuration output for it when ``FOO_DEVICE`` is disabled.
+
+.. code-block:: none
+
+   config FOO_DEVICE
+   	bool "Foo device"
+
+   config FOO_DEVICE_FREQUENCY
+   	int "Foo device frequency"
+   	depends on FOO_DEVICE
+
+In general, it's a good idea to check that only relevant symbols are ever shown
+in the ``menuconfig`` interface. Having ``FOO_DEVICE_FREQUENCY`` show up when
+``FOO_DEVICE`` is disabled (and possibly hidden) makes the relationship between
+the symbols harder to understand, even if code never looks at
+``FOO_DEVICE_FREQUENCY`` when ``FOO_DEVICE`` is disabled.
+
+
+``menuconfig`` symbols
+**********************
+
+If the definition of a symbol ``FOO`` is immediately followed by other symbols
+that depend on ``FOO``, then those symbols become children of ``FOO``. If
+``FOO`` is defined with ``config FOO``, then the children are shown indented
+relative to ``FOO``. Defining ``FOO`` with ``menuconfig FOO`` instead puts the
+children in a separate menu rooted at ``FOO``.
+
+``menuconfig`` has no effect on evaluation. It's just a display option.
+
+``menuconfig`` can cut down on the number of menus and make the menu structure
+easier to navigate. For example, say you have the following definitions:
+
+.. code-block:: none
+
+   menu "Foo subsystem"
+
+   config FOO_SUBSYSTEM
+   	bool "Foo subsystem"
+
+   if FOO_SUBSYSTEM
+
+   config FOO_FEATURE_1
+   	bool "Foo feature 1"
+
+   config FOO_FEATURE_2
+   	bool "Foo feature 2"
+
+   config FOO_FREQUENCY
+   	int "Foo frequency"
+
+   ... lots of other FOO-related symbols
+
+   endif # FOO_SUBSYSTEM
+
+   endmenu
+
+In this case, it's probably better to get rid of the ``menu`` and turn
+``FOO_SUBSYSTEM`` into a ``menuconfig`` symbol:
+
+.. code-block:: none
+
+   menuconfig FOO_SUBSYSTEM
+   	bool "Foo subsystem"
+
+   if FOO_SUBSYSTEM
+
+   config FOO_FEATURE_1
+   	bool "Foo feature 1"
+
+   config FOO_FEATURE_2
+   	bool "Foo feature 2"
+
+   config FOO_FREQUENCY
+   	int "Foo frequency"
+
+   ... lots of other FOO-related symbols
+
+   endif # FOO_SUBSYSTEM
+
+In the ``menuconfig`` interface, this will be displayed as follows:
+
+.. code-block:: none
+
+   [*] Foo subsystem  --->
+
+Note that making a symbol without children a ``menuconfig`` is meaningless. It
+should be avoided, because it looks identical to a symbol with all children
+invisible:
+
+.. code-block:: none
+
+   [*] I have no children  ----
+   [*] All my children are invisible  ----
+
+
 Checking changes in ``menuconfig``
 **********************************
 
@@ -522,6 +624,15 @@ without prompts, and somewhat obscure.
    definitions easier to discover and remove.
 
 
+Prompt strings
+==============
+
+For a Kconfig symbol that enables a driver/subsystem FOO, consider having just
+"Foo" as the prompt, instead of "Enable Foo support" or the like. It will
+usually be clear in the context of an option that can be toggled on/off, and
+makes things consistent.
+
+
 Lesser-known/used Kconfig features
 **********************************
 
@@ -601,7 +712,7 @@ toggled off to select none of the symbols:
    endchoice
 
 In the menuconfig interface, this will be displayed e.g. as ``[*] Use legacy
-protocol (LEGACY_PROTOCOL_1) --->``, where the choice can be toggled off to
+protocol (Legacy protocol 1) --->``, where the choice can be toggled off to
 enable neither of the symbols.
 
 
@@ -704,62 +815,52 @@ from the device tree.
 Device Tree Related Functions
 =============================
 
+See the Python docstrings in ``scripts/kconfig/kconfigfunctions.py`` for more
+details on the functions.
+
 .. code-block:: none
 
-  dt_int_val(kconf, _, name, unit):
-       This function looks up 'name' in the DTS generated "conf" style database
-       (generated_dts_board.conf in <build_dir>/zephyr/include/generated/)
-       and if it's found it will return the value as an decimal integer.  The
-       function will divide the value based on 'unit':
-           None        No division
-           'k' or 'K'  divide by 1024 (1 << 10)
-           'm' or 'M'  divide by 1,048,576 (1 << 20)
-           'g' or 'G'  divide by 1,073,741,824 (1 << 30)
-
-  dt_hex_val(kconf, _, name, unit):
-       This function looks up 'name' in the DTS generated "conf" style database
-       (generated_dts_board.conf in <build_dir>/zephyr/include/generated/)
-       and if it's found it will return the value as an hex integer.  The
-       function will divide the value based on 'unit':
-           None        No division
-           'k' or 'K'  divide by 1024 (1 << 10)
-           'm' or 'M'  divide by 1,048,576 (1 << 20)
-           'g' or 'G'  divide by 1,073,741,824 (1 << 30)
-
-  dt_str_val(kconf, _, name):
-       This function looks up 'name' in the DTS generated "conf" style database
-       (generated_dts_board.conf in <build_dir>/zephyr/include/generated/)
-       and if it's found it will return the value as string. if it's not found we
-       return an empty string.
+  dt_chosen_reg_addr(kconf, _, chosen, index=0, unit=None):
+  dt_chosen_reg_size(kconf, _, chosen, index=0, unit=None):
+  dt_node_reg_addr(kconf, _, path, index=0, unit=None):
+  dt_node_reg_size(kconf, _, path, index=0, unit=None):
+  dt_compat_enabled(kconf, _, compat):
+  dt_node_has_bool_prop(kconf, _, path, prop):
 
 Example Usage
-=============
+-------------
 
-The following example shows the usage of the ``dt_int_val`` function:
-
-.. code-block:: none
-
-   boards/arm/mimxrt1020_evk/Kconfig.defconfig
-
-   config FLASH_SIZE
-      default $(dt_int_val,DT_NXP_IMX_FLEXSPI_402A8000_SIZE_1,K)
-
-In this example if we examine the generated generated_dts_board.conf file
-as part of the Zephyr build we'd find the following entry:
+The following example shows the usage of the ``dt_node_reg_addr`` function.
+This function will take a path to a device tree node and register the register
+address of that node:
 
 .. code-block:: none
 
-   DT_NXP_IMX_FLEXSPI_402A8000_SIZE_1=8388608
+   boards/riscv/hifive1_revb/Kconfig.defconfig
 
-The ``dt_int_val`` will search the generated_dts_board.conf that is derived from
-the dts for the board and match the ``DT_NXP_IMX_FLEXSPI_402A8000_SIZE_1`` entry.
-The function than will than scale the value by ``1024``.  This effective causes
+   config FLASH_BASE_ADDRESS
+      default $(dt_node_reg_addr,/soc/spi@10014000,1)
+
+In this example if we examine the dts file for the board:
+
+.. code-block:: none
+
+   spi0: spi@10014000 {
+      compatible = "sifive,spi0";
+      reg = <0x10014000 0x1000 0x20010000 0x3c0900>;
+      reg-names = "control", "mem";
+      ...
+   };
+
+The ``dt_node_reg_addr`` will search the dts file for a node at the path
+``/soc/spi@10014000``.  The function than will extract the register address
+at the index 1.  This effective gets the value of ``0x20010000`` and causes
 the above to look like:
 
 .. code-block:: none
 
-   config FLASH_SIZE
-      default 8192
+   config FLASH_BASE_ADDRESS
+      default 0x20010000
 
 
 Other resources

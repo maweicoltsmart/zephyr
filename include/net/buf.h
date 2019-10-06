@@ -12,7 +12,7 @@
 
 #include <stddef.h>
 #include <zephyr/types.h>
-#include <misc/util.h>
+#include <sys/util.h>
 #include <zephyr.h>
 
 #ifdef __cplusplus
@@ -27,7 +27,7 @@ extern "C" {
  */
 
 /* Alignment needed for various parts of the buffer definition */
-#define __net_buf_align __aligned(sizeof(int))
+#define __net_buf_align __aligned(sizeof(void *))
 
 /**
  *  @def NET_BUF_SIMPLE_DEFINE
@@ -152,6 +152,19 @@ static inline void net_buf_simple_reset(struct net_buf_simple *buf)
 	buf->len  = 0U;
 	buf->data = buf->__buf;
 }
+
+/**
+ * Clone buffer state, using the same data buffer.
+ *
+ * Initializes a buffer to point to the same data as an existing buffer.
+ * Allows operations on the same data without altering the length and
+ * offset of the original.
+ *
+ * @param original Buffer to clone.
+ * @param clone The new clone.
+ */
+void net_buf_simple_clone(const struct net_buf_simple *original,
+			  struct net_buf_simple *clone);
 
 /**
  * @brief Prepare data to be added at the end of the buffer

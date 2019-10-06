@@ -5,7 +5,7 @@
  */
 
 #include <ztest.h>
-#include <power.h>
+#include <power/power.h>
 
 #define STACK_SIZE (512 + CONFIG_TEST_EXTRA_STACKSIZE)
 #define NUM_THREAD 4
@@ -134,7 +134,7 @@ void test_tickless_slice(void)
 void test_main(void)
 {
 	ztest_test_suite(tickless_concept,
-			 ztest_unit_test(test_tickless_sysclock),
-			 ztest_unit_test(test_tickless_slice));
+			 ztest_1cpu_unit_test(test_tickless_sysclock),
+			 ztest_1cpu_unit_test(test_tickless_slice));
 	ztest_run_test_suite(tickless_concept);
 }

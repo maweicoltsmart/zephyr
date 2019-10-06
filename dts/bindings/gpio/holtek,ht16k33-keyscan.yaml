@@ -1,34 +1,19 @@
----
 title: Holtek HT16K33 LED Driver With Keyscan
-version: 0.1
 
 description: Holtek HT16K33 Keyscan binding
 
-parent:
-    bus: ht16k33
+compatible: "holtek,ht16k33-keyscan"
+
+include: base.yaml
+
+parent-bus: ht16k33
 
 properties:
-    compatible:
-      type: string
-      category: required
-      description: compatible strings
-      constraint: "holtek,ht16k33-keyscan"
-      generation: define
     reg:
-      type: array
-      description: Keyscan row on the HT16K33 (KSx)
-      generation: define
-      category: required
+      required: true
     label:
-      type: string
-      category: required
-      description: Human readable string describing the device (used by Zephyr for API name)
-      generation: define
+      required: true
 
-cell_string: GPIO
-
-"#cells":
+gpio-cells:
   - pin
   - flags
-
-...

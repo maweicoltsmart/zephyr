@@ -70,14 +70,45 @@ void test_poll_no_wait(void)
 					 NULL),
 	};
 
+#ifdef CONFIG_USERSPACE
+	/* Test that k_poll() syscall handler safely handles being
+	 * fed garbage
+	 *
+	 * TODO: Where possible migrate these to the main k_poll()
+	 * implementation
+	 */
+
+	zassert_equal(k_poll(events, 0, K_NO_WAIT), -EINVAL, NULL);
+	zassert_equal(k_poll(events, INT_MAX, K_NO_WAIT), -EINVAL, NULL);
+	zassert_equal(k_poll(events, 4096, K_NO_WAIT), -ENOMEM, NULL);
+
+	struct k_poll_event bad_events[] = {
+		K_POLL_EVENT_INITIALIZER(K_POLL_TYPE_SEM_AVAILABLE,
+					 K_POLL_NUM_MODES,
+					 &no_wait_sem),
+	};
+	zassert_equal(k_poll(bad_events, ARRAY_SIZE(bad_events), K_NO_WAIT),
+		      -EINVAL,
+		      NULL);
+
+	struct k_poll_event bad_events2[] = {
+		K_POLL_EVENT_INITIALIZER(0xFU,
+					 K_POLL_MODE_NOTIFY_ONLY,
+					 &no_wait_sem),
+	};
+	zassert_equal(k_poll(bad_events2, ARRAY_SIZE(bad_events), K_NO_WAIT),
+		      -EINVAL,
+		      NULL);
+#endif /* CONFIG_USERSPACE */
+
 	/* test polling events that are already ready */
 	zassert_false(k_fifo_alloc_put(&no_wait_fifo, &msg), NULL);
 	k_poll_signal_raise(&no_wait_signal, SIGNAL_RESULT);
 
-	zassert_equal(k_poll(events, ARRAY_SIZE(events), 0), 0, "");
+	zassert_equal(k_poll(events, ARRAY_SIZE(events), K_NO_WAIT), 0, "");
 
 	zassert_equal(events[0].state, K_POLL_STATE_SEM_AVAILABLE, "");
-	zassert_equal(k_sem_take(&no_wait_sem, 0), 0, "");
+	zassert_equal(k_sem_take(&no_wait_sem, K_NO_WAIT), 0, "");
 
 	zassert_equal(events[1].state, K_POLL_STATE_FIFO_DATA_AVAILABLE, "");
 	msg_ptr = k_fifo_get(&no_wait_fifo, 0);
@@ -99,13 +130,14 @@ void test_poll_no_wait(void)
 	events[3].state = K_POLL_STATE_NOT_READY;
 	k_poll_signal_reset(&no_wait_signal);
 
-	zassert_equal(k_poll(events, ARRAY_SIZE(events), 0), -EAGAIN, "");
+	zassert_equal(k_poll(events, ARRAY_SIZE(events), K_NO_WAIT), -EAGAIN,
+		      "");
 	zassert_equal(events[0].state, K_POLL_STATE_NOT_READY, "");
 	zassert_equal(events[1].state, K_POLL_STATE_NOT_READY, "");
 	zassert_equal(events[2].state, K_POLL_STATE_NOT_READY, "");
 	zassert_equal(events[3].state, K_POLL_STATE_NOT_READY, "");
 
-	zassert_not_equal(k_sem_take(&no_wait_sem, 0), 0, "");
+	zassert_not_equal(k_sem_take(&no_wait_sem, K_NO_WAIT), 0, "");
 	zassert_is_null(k_fifo_get(&no_wait_fifo, 0), "");
 }
 
@@ -187,7 +219,7 @@ void test_poll_wait(void)
 	zassert_equal(rc, 0, "");
 
 	zassert_equal(wait_events[0].state, K_POLL_STATE_SEM_AVAILABLE, "");
-	zassert_equal(k_sem_take(&wait_sem, 0), 0, "");
+	zassert_equal(k_sem_take(&wait_sem, K_NO_WAIT), 0, "");
 	zassert_equal(wait_events[0].tag, TAG_0, "");
 
 	zassert_equal(wait_events[1].state,
@@ -243,7 +275,7 @@ void test_poll_wait(void)
 	zassert_equal(rc, 0, "");
 
 	zassert_equal(wait_events[0].state, K_POLL_STATE_SEM_AVAILABLE, "");
-	zassert_equal(k_sem_take(&wait_sem, 0), 0, "");
+	zassert_equal(k_sem_take(&wait_sem, K_NO_WAIT), 0, "");
 	zassert_equal(wait_events[0].tag, TAG_0, "");
 
 	zassert_equal(wait_events[1].state, K_POLL_STATE_NOT_READY, "");
@@ -278,7 +310,7 @@ void test_poll_wait(void)
 	zassert_equal(rc, 0, "");
 
 	zassert_equal(wait_events[0].state, K_POLL_STATE_SEM_AVAILABLE, "");
-	zassert_equal(k_sem_take(&wait_sem, 0), 0, "");
+	zassert_equal(k_sem_take(&wait_sem, K_NO_WAIT), 0, "");
 	zassert_equal(wait_events[0].tag, TAG_0, "");
 
 	zassert_equal(wait_events[1].state, K_POLL_STATE_NOT_READY, "");
@@ -297,7 +329,7 @@ void test_poll_wait(void)
 	zassert_equal(rc, 0, "");
 
 	zassert_equal(wait_events[0].state, K_POLL_STATE_NOT_READY, "");
-	zassert_equal(k_sem_take(&wait_sem, 0), -EBUSY, "");
+	zassert_equal(k_sem_take(&wait_sem, K_NO_WAIT), -EBUSY, "");
 	zassert_equal(wait_events[0].tag, TAG_0, "");
 
 	zassert_equal(wait_events[1].state,
@@ -317,7 +349,7 @@ void test_poll_wait(void)
 	zassert_equal(rc, 0, "");
 
 	zassert_equal(wait_events[0].state, K_POLL_STATE_NOT_READY, "");
-	zassert_equal(k_sem_take(&wait_sem, 0), -EBUSY, "");
+	zassert_equal(k_sem_take(&wait_sem, K_NO_WAIT), -EBUSY, "");
 	zassert_equal(wait_events[0].tag, TAG_0, "");
 
 	zassert_equal(wait_events[1].state, K_POLL_STATE_NOT_READY, "");

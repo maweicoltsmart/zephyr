@@ -48,6 +48,10 @@ features:
 +-----------+------------+----------------------+
 | UART      | on-chip    | serial               |
 +-----------+------------+----------------------+
+| I2C       | on-chip    | i2c                  |
++-----------+------------+----------------------+
+| SPI       | on-chip    | spi                  |
++-----------+------------+----------------------+
 
 Other hardware features are not supported by the Zephyr kernel.
 
@@ -167,6 +171,15 @@ You can debug an application in the usual way.  Here is an example for the
    :maybe-skip-config:
    :goals: debug
 
+Bootloader
+==========
+
+The ROM bootloader on CC13x2 and CC26x2 devices is enabled by default. The
+bootloader will start if there is no valid application image in flash or the
+so-called backdoor is enabled (via option
+:option:`CONFIG_CC13X2_CC26X2_BOOTLOADER_BACKDOOR_ENABLE`) and BTN-1 is held
+down during reset. See the bootloader documentation in chapter 10 of the `TI
+CC13x2 / CC26x2 Technical Reference Manual`_ for additional information.
 
 References
 **********
@@ -186,5 +199,5 @@ CC26X2R1 LaunchPad Quick Start Guide:
 .. _TI CC2652R Datasheet:
    http://www.ti.com/lit/pdf/swrs207
 
-.. _TI CC26x2R Technical Reference Manual:
+.. _TI CC13x2 / CC26x2 Technical Reference Manual:
    http://www.ti.com/lit/pdf/swcu185

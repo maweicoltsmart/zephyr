@@ -5,7 +5,7 @@
  */
 
 #include <shell/shell_uart.h>
-#include <uart.h>
+#include <drivers/uart.h>
 #include <init.h>
 #include <logging/log.h>
 
@@ -53,9 +53,10 @@ static void uart_rx_handle(const struct shell_uart *sh_uart)
 					break;
 				}
 			}
+
 			rd_len -= i;
+			new_data = true;
 			if (rd_len) {
-				new_data = true;
 				for (u32_t j = 0; j < rd_len; j++) {
 					data[j] = data[i + j];
 				}

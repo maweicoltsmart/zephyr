@@ -8,7 +8,17 @@
 #ifndef ZEPHYR_INCLUDE_NET_SNTP_H_
 #define ZEPHYR_INCLUDE_NET_SNTP_H_
 
+#ifdef CONFIG_NET_SOCKETS_POSIX_NAMES
 #include <net/socket.h>
+#else
+#include <posix/sys/socket.h>
+#include <posix/unistd.h>
+#include <posix/poll.h>
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  * @brief Simple Network Time Protocol API
@@ -81,6 +91,26 @@ int sntp_query(struct sntp_ctx *ctx, u32_t timeout,
  * @param ctx Address of sntp context.
  */
 void sntp_close(struct sntp_ctx *ctx);
+
+/**
+ * @brief Convenience function to query SNTP in one-shot fashion
+ *
+ * Convenience wrapper which calls getaddrinfo(), sntp_init(),
+ * sntp_query(), and sntp_close().
+ *
+ * @param server Address of server in format addr[:port]
+ * @param timeout Query timeout
+ * @param time Timestamp including integer and fractional seconds since
+ * 1 Jan 1970 (output).
+ *
+ * @return 0 if ok, <0 if error (-ETIMEDOUT if timeout).
+ */
+int sntp_simple(const char *server, u32_t timeout,
+		struct sntp_time *time);
+
+#ifdef __cplusplus
+}
+#endif
 
 /**
  * @}

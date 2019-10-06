@@ -20,10 +20,10 @@
 #include <zephyr.h>
 #include <ztest.h>
 #include <tc_util.h>
-#include <misc/util.h>
+#include <sys/util.h>
 
-#define  ONE_SECOND     (CONFIG_SYS_CLOCK_TICKS_PER_SEC)
-#define  TENTH_SECOND   (CONFIG_SYS_CLOCK_TICKS_PER_SEC / 10)
+#define  ONE_SECOND     1000
+#define  TENTH_SECOND   100
 
 #define  NUM_BLOCKS     64
 
@@ -204,7 +204,7 @@ static void test_pool_block_get_timeout(void)
 		free_blocks(getwt_set, ARRAY_SIZE(getwt_set));
 	}
 
-	rv = k_mem_pool_alloc(&POOL_ID, &helper_block, 3148, 5);
+	rv = k_mem_pool_alloc(&POOL_ID, &helper_block, 3148, K_MSEC(5));
 	zassert_true(rv == 0,
 		     "Failed to get size 3148 byte block from POOL_ID");
 
@@ -213,7 +213,7 @@ static void test_pool_block_get_timeout(void)
 		     "byte block from POOL_ID");
 
 	k_sem_give(&HELPER_SEM);    /* Activate helper_task */
-	rv = k_mem_pool_alloc(&POOL_ID, &block, 3148, 20);
+	rv = k_mem_pool_alloc(&POOL_ID, &block, 3148, K_MSEC(20));
 	zassert_true(rv == 0, "Failed to get size 3148 byte block from POOL_ID");
 
 	rv = k_sem_take(&REGRESS_SEM, K_NO_WAIT);
@@ -346,7 +346,7 @@ void test_main(void)
 {
 	ztest_test_suite(mempool,
 			 ztest_unit_test(test_pool_block_get),
-			 ztest_unit_test(test_pool_block_get_timeout),
+			 ztest_1cpu_unit_test(test_pool_block_get_timeout),
 			 ztest_unit_test(test_pool_block_get_wait),
 			 ztest_unit_test(test_pool_malloc)
 			 );

@@ -16,10 +16,10 @@
 #include <toolchain.h>
 #include <linker/sections.h>
 #include <wait_q.h>
-#include <misc/dlist.h>
+#include <sys/dlist.h>
 #include <init.h>
 #include <syscall_handler.h>
-#include <misc/__assert.h>
+#include <sys/__assert.h>
 #include <kernel_internal.h>
 
 struct k_pipe_desc {
@@ -37,9 +37,6 @@ struct k_pipe_async {
 	struct k_pipe_desc  desc;     /* Pipe message descriptor */
 };
 
-extern struct k_pipe _k_pipe_list_start[];
-extern struct k_pipe _k_pipe_list_end[];
-
 #ifdef CONFIG_OBJECT_TRACING
 struct k_pipe *_trace_list_k_pipe;
 #endif	/* CONFIG_OBJECT_TRACING */
@@ -52,13 +49,13 @@ K_STACK_DEFINE(pipe_async_msgs, CONFIG_NUM_PIPE_ASYNC_MSGS);
 /* Allocate an asynchronous message descriptor */
 static void pipe_async_alloc(struct k_pipe_async **async)
 {
-	(void)k_stack_pop(&pipe_async_msgs, (u32_t *)async, K_FOREVER);
+	(void)k_stack_pop(&pipe_async_msgs, (stack_data_t *)async, K_FOREVER);
 }
 
 /* Free an asynchronous message descriptor */
 static void pipe_async_free(struct k_pipe_async *async)
 {
-	k_stack_push(&pipe_async_msgs, (u32_t)async);
+	k_stack_push(&pipe_async_msgs, (stack_data_t)async);
 }
 
 /* Finish an asynchronous operation */
@@ -111,16 +108,14 @@ static int init_pipes_module(struct device *dev)
 
 		z_init_thread_timeout(&async_msg[i].thread);
 
-		k_stack_push(&pipe_async_msgs, (u32_t)&async_msg[i]);
+		k_stack_push(&pipe_async_msgs, (stack_data_t)&async_msg[i]);
 	}
 #endif /* CONFIG_NUM_PIPE_ASYNC_MSGS > 0 */
 
 	/* Complete initialization of statically defined mailboxes. */
 
 #ifdef CONFIG_OBJECT_TRACING
-	struct k_pipe *pipe;
-
-	for (pipe = _k_pipe_list_start; pipe < _k_pipe_list_end; pipe++) {
+	Z_STRUCT_SECTION_FOREACH(k_pipe, pipe) {
 		SYS_TRACING_OBJ_INIT(k_pipe, pipe);
 	}
 #endif /* CONFIG_OBJECT_TRACING */
@@ -169,12 +164,13 @@ int z_impl_k_pipe_alloc_init(struct k_pipe *pipe, size_t size)
 }
 
 #ifdef CONFIG_USERSPACE
-Z_SYSCALL_HANDLER(k_pipe_alloc_init, pipe, size)
+static inline int z_vrfy_k_pipe_alloc_init(struct k_pipe *pipe, size_t size)
 {
 	Z_OOPS(Z_SYSCALL_OBJ_NEVER_INIT(pipe, K_OBJ_PIPE));
 
-	return z_impl_k_pipe_alloc_init((struct k_pipe *)pipe, size);
+	return z_impl_k_pipe_alloc_init(pipe, size);
 }
+#include <syscalls/k_pipe_alloc_init_mrsh.c>
 #endif
 
 void k_pipe_cleanup(struct k_pipe *pipe)
@@ -667,7 +663,7 @@ int z_impl_k_pipe_get(struct k_pipe *pipe, void *data, size_t bytes_to_read,
 		desc->buffer         += bytes_copied;
 		desc->bytes_to_xfer  -= bytes_copied;
 
-		/* Write request has been satsified */
+		/* Write request has been satisfied */
 		pipe_thread_ready(thread);
 
 		thread = (struct k_thread *)sys_dlist_get(&xfer_list);
@@ -715,12 +711,9 @@ int z_impl_k_pipe_get(struct k_pipe *pipe, void *data, size_t bytes_to_read,
 }
 
 #ifdef CONFIG_USERSPACE
-Z_SYSCALL_HANDLER(k_pipe_get,
-		  pipe, data, bytes_to_read, bytes_read_p, min_xfer_p, timeout)
+int z_vrfy_k_pipe_get(struct k_pipe *pipe, void *data, size_t bytes_to_read,
+		      size_t *bytes_read, size_t min_xfer, s32_t timeout)
 {
-	size_t *bytes_read = (size_t *)bytes_read_p;
-	size_t min_xfer = (size_t)min_xfer_p;
-
 	Z_OOPS(Z_SYSCALL_OBJ(pipe, K_OBJ_PIPE));
 	Z_OOPS(Z_SYSCALL_MEMORY_WRITE(bytes_read, sizeof(*bytes_read)));
 	Z_OOPS(Z_SYSCALL_MEMORY_WRITE((void *)data, bytes_to_read));
@@ -730,6 +723,7 @@ Z_SYSCALL_HANDLER(k_pipe_get,
 				bytes_to_read, bytes_read, min_xfer,
 				timeout);
 }
+#include <syscalls/k_pipe_get_mrsh.c>
 #endif
 
 int z_impl_k_pipe_put(struct k_pipe *pipe, void *data, size_t bytes_to_write,
@@ -744,12 +738,9 @@ int z_impl_k_pipe_put(struct k_pipe *pipe, void *data, size_t bytes_to_write,
 }
 
 #ifdef CONFIG_USERSPACE
-Z_SYSCALL_HANDLER(k_pipe_put, pipe, data, bytes_to_write, bytes_written_p,
-		  min_xfer_p, timeout)
+int z_vrfy_k_pipe_put(struct k_pipe *pipe, void *data, size_t bytes_to_write,
+		     size_t *bytes_written, size_t min_xfer, s32_t timeout)
 {
-	size_t *bytes_written = (size_t *)bytes_written_p;
-	size_t min_xfer = (size_t)min_xfer_p;
-
 	Z_OOPS(Z_SYSCALL_OBJ(pipe, K_OBJ_PIPE));
 	Z_OOPS(Z_SYSCALL_MEMORY_WRITE(bytes_written, sizeof(*bytes_written)));
 	Z_OOPS(Z_SYSCALL_MEMORY_READ((void *)data, bytes_to_write));
@@ -759,6 +750,7 @@ Z_SYSCALL_HANDLER(k_pipe_put, pipe, data, bytes_to_write, bytes_written_p,
 				bytes_to_write, bytes_written, min_xfer,
 				timeout);
 }
+#include <syscalls/k_pipe_put_mrsh.c>
 #endif
 
 #if (CONFIG_NUM_PIPE_ASYNC_MSGS > 0)
@@ -775,6 +767,9 @@ void k_pipe_block_put(struct k_pipe *pipe, struct k_mem_block *block,
 	async_desc->desc.copy_block = *block;
 	async_desc->desc.sem = sem;
 	async_desc->thread.prio = k_thread_priority_get(_current);
+#ifdef CONFIG_SMP
+	async_desc->thread.is_idle = 0;
+#endif
 
 	(void) z_pipe_put_internal(pipe, async_desc, block->data,
 				    bytes_to_write, &dummy_bytes_written,

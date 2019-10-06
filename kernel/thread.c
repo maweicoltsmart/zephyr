@@ -18,29 +18,23 @@
 
 #include <spinlock.h>
 #include <kernel_structs.h>
-#include <misc/printk.h>
+#include <sys/math_extras.h>
 #include <sys_clock.h>
-#include <drivers/system_timer.h>
+#include <drivers/timer/system_timer.h>
 #include <ksched.h>
 #include <wait_q.h>
-#include <atomic.h>
+#include <sys/atomic.h>
 #include <syscall_handler.h>
 #include <kernel_internal.h>
 #include <kswap.h>
 #include <init.h>
-#include <tracing.h>
+#include <debug/tracing.h>
 #include <stdbool.h>
-
-extern struct _static_thread_data _static_thread_data_list_start[];
-extern struct _static_thread_data _static_thread_data_list_end[];
 
 static struct k_spinlock lock;
 
 #define _FOREACH_STATIC_THREAD(thread_data)              \
-	for (struct _static_thread_data *thread_data =   \
-	     _static_thread_data_list_start;             \
-	     thread_data < _static_thread_data_list_end; \
-	     thread_data++)
+	Z_STRUCT_SECTION_FOREACH(_static_thread_data, thread_data)
 
 void k_thread_foreach(k_thread_user_cb_t user_cb, void *user_data)
 {
@@ -66,7 +60,7 @@ void k_thread_foreach(k_thread_user_cb_t user_cb, void *user_data)
 
 bool k_is_in_isr(void)
 {
-	return z_is_in_isr();
+	return z_arch_is_in_isr();
 }
 
 /*
@@ -124,11 +118,11 @@ void z_impl_k_busy_wait(u32_t usec_to_wait)
 }
 
 #ifdef CONFIG_USERSPACE
-Z_SYSCALL_HANDLER(k_busy_wait, usec_to_wait)
+static inline void z_vrfy_k_busy_wait(u32_t usec_to_wait)
 {
 	z_impl_k_busy_wait(usec_to_wait);
-	return 0;
 }
+#include <syscalls/k_busy_wait_mrsh.c>
 #endif /* CONFIG_USERSPACE */
 #endif /* CONFIG_SYS_CLOCK_EXISTS */
 
@@ -138,11 +132,27 @@ void z_impl_k_thread_custom_data_set(void *value)
 	_current->custom_data = value;
 }
 
+#ifdef CONFIG_USERSPACE
+static inline void z_vrfy_k_thread_custom_data_set(void *data)
+{
+	z_impl_k_thread_custom_data_set(data);
+}
+#include <syscalls/k_thread_custom_data_set_mrsh.c>
+#endif
+
 void *z_impl_k_thread_custom_data_get(void)
 {
 	return _current->custom_data;
 }
 
+#ifdef CONFIG_USERSPACE
+static inline void *z_vrfy_k_thread_custom_data_get(void)
+{
+	return z_impl_k_thread_custom_data_get();
+}
+#include <syscalls/k_thread_custom_data_get_mrsh.c>
+
+#endif /* CONFIG_USERSPACE */
 #endif /* CONFIG_THREAD_CUSTOM_DATA */
 
 #if defined(CONFIG_THREAD_MONITOR)
@@ -172,61 +182,140 @@ void z_thread_monitor_exit(struct k_thread *thread)
 }
 #endif
 
+int z_impl_k_thread_name_set(struct k_thread *thread, const char *value)
+{
 #ifdef CONFIG_THREAD_NAME
-void z_impl_k_thread_name_set(struct k_thread *thread, const char *value)
-{
 	if (thread == NULL) {
-		_current->name = value;
-	} else {
-		thread->name = value;
+		thread = _current;
 	}
-}
 
-const char *z_impl_k_thread_name_get(struct k_thread *thread)
-{
-	return (const char *)thread->name;
-}
-
+	strncpy(thread->name, value, CONFIG_THREAD_MAX_NAME_LEN);
+	thread->name[CONFIG_THREAD_MAX_NAME_LEN - 1] = '\0';
+	sys_trace_thread_name_set(thread);
+	return 0;
 #else
-void z_impl_k_thread_name_set(k_tid_t thread_id, const char *value)
-{
-	ARG_UNUSED(thread_id);
+	ARG_UNUSED(thread);
 	ARG_UNUSED(value);
-}
-
-const char *z_impl_k_thread_name_get(k_tid_t thread_id)
-{
-	ARG_UNUSED(thread_id);
-	return NULL;
-}
+	return -ENOSYS;
 #endif /* CONFIG_THREAD_NAME */
+}
 
 #ifdef CONFIG_USERSPACE
-
-#if defined(CONFIG_THREAD_NAME)
-Z_SYSCALL_HANDLER(k_thread_name_set, thread, data)
+static inline int z_vrfy_k_thread_name_set(struct k_thread *t, const char *str)
 {
-	char *name_copy = NULL;
+#ifdef CONFIG_THREAD_NAME
+	size_t len;
+	int err;
 
-	name_copy = z_user_string_alloc_copy((char *)data, 64);
-	z_impl_k_thread_name_set((struct k_thread *)thread, name_copy);
-	return 0;
+	if (t != NULL) {
+		if (Z_SYSCALL_OBJ(t, K_OBJ_THREAD) != 0) {
+			return -EINVAL;
+		}
+	}
+
+	len = z_user_string_nlen(str, CONFIG_THREAD_MAX_NAME_LEN, &err);
+	if (err != 0) {
+		return -EFAULT;
+	}
+	if (Z_SYSCALL_MEMORY_READ(str, len) != 0) {
+		return -EFAULT;
+	}
+
+	return z_impl_k_thread_name_set(t, str);
+#else
+	return -ENOSYS;
+#endif /* CONFIG_THREAD_NAME */
+}
+#include <syscalls/k_thread_name_set_mrsh.c>
+#endif /* CONFIG_USERSPACE */
+
+const char *k_thread_name_get(struct k_thread *thread)
+{
+#ifdef CONFIG_THREAD_NAME
+	return (const char *)thread->name;
+#else
+	ARG_UNUSED(thread);
+	return NULL;
+#endif /* CONFIG_THREAD_NAME */
 }
 
-Z_SYSCALL_HANDLER1_SIMPLE(k_thread_name_get, K_OBJ_THREAD, k_tid_t);
-#endif
-
-#ifdef CONFIG_THREAD_CUSTOM_DATA
-Z_SYSCALL_HANDLER(k_thread_custom_data_set, data)
+int z_impl_k_thread_name_copy(k_tid_t thread_id, char *buf, size_t size)
 {
-	z_impl_k_thread_custom_data_set((void *)data);
+#ifdef CONFIG_THREAD_NAME
+	strncpy(buf, thread_id->name, size);
 	return 0;
+#else
+	ARG_UNUSED(thread_id);
+	ARG_UNUSED(buf);
+	ARG_UNUSED(size);
+	return -ENOSYS;
+#endif /* CONFIG_THREAD_NAME */
 }
 
-Z_SYSCALL_HANDLER0_SIMPLE(k_thread_custom_data_get);
-#endif /* CONFIG_THREAD_CUSTOM_DATA */
+const char *k_thread_state_str(k_tid_t thread_id)
+{
+	switch (thread_id->base.thread_state) {
+	case 0:
+		return "";
+		break;
+	case _THREAD_DUMMY:
+		return "dummy";
+		break;
+	case _THREAD_PENDING:
+		return "pending";
+		break;
+	case _THREAD_PRESTART:
+		return "restart";
+		break;
+	case _THREAD_DEAD:
+		return "dead";
+		break;
+	case _THREAD_SUSPENDED:
+		return "suspended";
+		break;
+	case _THREAD_ABORTING:
+		return "aborting";
+		break;
+	case _THREAD_QUEUED:
+		return "queued";
+		break;
+	}
+	return "unknown";
+}
 
-#endif
+#ifdef CONFIG_USERSPACE
+static inline int z_vrfy_k_thread_name_copy(k_tid_t t, char *buf, size_t size)
+{
+#ifdef CONFIG_THREAD_NAME
+	size_t len;
+	struct _k_object *ko = z_object_find(t);
+
+	/* Special case: we allow reading the names of initialized threads
+	 * even if we don't have permission on them
+	 */
+	if (t == NULL || ko->type != K_OBJ_THREAD ||
+	    (ko->flags & K_OBJ_FLAG_INITIALIZED) == 0) {
+		return -EINVAL;
+	}
+	if (Z_SYSCALL_MEMORY_WRITE(buf, size) != 0) {
+		return -EFAULT;
+	}
+	len = strlen(t->name);
+	if (len + 1 > size) {
+		return -ENOSPC;
+	}
+
+	return z_user_to_copy((void *)buf, t->name, len + 1);
+#else
+	ARG_UNUSED(t);
+	ARG_UNUSED(buf);
+	ARG_UNUSED(size);
+	return -ENOSYS;
+#endif /* CONFIG_THREAD_NAME */
+}
+#include <syscalls/k_thread_name_copy_mrsh.c>
+#endif /* CONFIG_USERSPACE */
+
 
 #ifdef CONFIG_STACK_SENTINEL
 /* Check that the stack sentinel is still present
@@ -256,7 +345,7 @@ void z_check_stack_sentinel(void)
 	if (*stack != STACK_SENTINEL) {
 		/* Restore it so further checks don't trigger this same error */
 		*stack = STACK_SENTINEL;
-		z_except_reason(_NANO_ERR_STACK_CHK_FAIL);
+		z_except_reason(K_ERR_STACK_CHK_FAIL);
 	}
 }
 #endif
@@ -277,7 +366,12 @@ void z_impl_k_thread_start(struct k_thread *thread)
 }
 
 #ifdef CONFIG_USERSPACE
-Z_SYSCALL_HANDLER1_SIMPLE_VOID(k_thread_start, K_OBJ_THREAD, struct k_thread *);
+static inline void z_vrfy_k_thread_start(struct k_thread *thread)
+{
+	Z_OOPS(Z_SYSCALL_OBJ(thread, K_OBJ_THREAD));
+	return z_impl_k_thread_start(thread);
+}
+#include <syscalls/k_thread_start_mrsh.c>
 #endif
 #endif
 
@@ -317,8 +411,8 @@ static inline size_t adjust_stack_size(size_t stack_size)
 		random_val = sys_rand32_get();
 	}
 
-	/* Don't need to worry about alignment of the size here, z_new_thread()
-	 * is required to do it
+	/* Don't need to worry about alignment of the size here,
+	 * z_arch_new_thread() is required to do it.
 	 *
 	 * FIXME: Not the best way to get a random number in a range.
 	 * See #6493
@@ -349,6 +443,14 @@ void z_setup_new_thread(struct k_thread *new_thread,
 		       void *p1, void *p2, void *p3,
 		       int prio, u32_t options, const char *name)
 {
+#ifdef CONFIG_USERSPACE
+	z_object_init(new_thread);
+	z_object_init(stack);
+	new_thread->stack_obj = stack;
+
+	/* Any given thread has access to itself */
+	k_object_access_grant(new_thread, new_thread);
+#endif
 	stack_size = adjust_stack_size(stack_size);
 
 #ifdef CONFIG_THREAD_USERSPACE_LOCAL_DATA
@@ -359,12 +461,12 @@ void z_setup_new_thread(struct k_thread *new_thread,
 #endif
 #endif
 
-	z_new_thread(new_thread, stack, stack_size, entry, p1, p2, p3,
-		    prio, options);
+	z_arch_new_thread(new_thread, stack, stack_size, entry, p1, p2, p3,
+			  prio, options);
 
 #ifdef CONFIG_THREAD_USERSPACE_LOCAL_DATA
 #ifndef CONFIG_THREAD_USERSPACE_LOCAL_DATA_ARCH_DEFER_SETUP
-	/* don't set again if the arch's own code in z_new_thread() has
+	/* don't set again if the arch's own code in z_arch_new_thread() has
 	 * already set the pointer.
 	 */
 	new_thread->userspace_local_data =
@@ -386,15 +488,12 @@ void z_setup_new_thread(struct k_thread *new_thread,
 	k_spin_unlock(&lock, key);
 #endif
 #ifdef CONFIG_THREAD_NAME
-	new_thread->name = name;
-#endif
-#ifdef CONFIG_USERSPACE
-	z_object_init(new_thread);
-	z_object_init(stack);
-	new_thread->stack_obj = stack;
-
-	/* Any given thread has access to itself */
-	k_object_access_grant(new_thread, new_thread);
+	if (name != NULL) {
+		strncpy(new_thread->name, name,
+			CONFIG_THREAD_MAX_NAME_LEN - 1);
+		/* Ensure NULL termination, truncate if longer */
+		new_thread->name[CONFIG_THREAD_MAX_NAME_LEN - 1] = '\0';
+	}
 #endif
 #ifdef CONFIG_SCHED_CPU_MASK
 	new_thread->base.cpu_mask = -1;
@@ -431,12 +530,13 @@ k_tid_t z_impl_k_thread_create(struct k_thread *new_thread,
 			      void *p1, void *p2, void *p3,
 			      int prio, u32_t options, s32_t delay)
 {
-	__ASSERT(!z_is_in_isr(), "Threads may not be created in ISRs");
+	__ASSERT(!z_arch_is_in_isr(), "Threads may not be created in ISRs");
 
 	/* Special case, only for unit tests */
 #if defined(CONFIG_TEST) && defined(CONFIG_ARCH_HAS_USERSPACE) && !defined(CONFIG_USERSPACE)
 	__ASSERT((options & K_USER) == 0,
-		 "Platform is capable of user mode, and test thread created with K_USER option, but CONFIG_TEST_USERSPACE or CONFIG_USERSPACE is not set\n");
+		 "Platform is capable of user mode, and test thread created with K_USER option,"
+		 " but neither CONFIG_TEST_USERSPACE nor CONFIG_USERSPACE is set\n");
 #endif
 
 	z_setup_new_thread(new_thread, stack, stack_size, entry, p1, p2, p3,
@@ -451,18 +551,14 @@ k_tid_t z_impl_k_thread_create(struct k_thread *new_thread,
 
 
 #ifdef CONFIG_USERSPACE
-Z_SYSCALL_HANDLER(k_thread_create,
-		  new_thread_p, stack_p, stack_size, entry, p1, more_args)
+k_tid_t z_vrfy_k_thread_create(struct k_thread *new_thread,
+			       k_thread_stack_t *stack,
+			       size_t stack_size, k_thread_entry_t entry,
+			       void *p1, void *p2, void *p3,
+			       int prio, u32_t options, s32_t delay)
 {
-	int prio;
-	u32_t options, delay;
 	u32_t total_size;
-
 	struct _k_object *stack_object;
-	struct k_thread *new_thread = (struct k_thread *)new_thread_p;
-	volatile struct _syscall_10_args *margs =
-		(volatile struct _syscall_10_args *)more_args;
-	k_thread_stack_t *stack = (k_thread_stack_t *)stack_p;
 
 	/* The thread and stack objects *must* be in an uninitialized state */
 	Z_OOPS(Z_SYSCALL_OBJ_NEVER_INIT(new_thread, K_OBJ_THREAD));
@@ -475,10 +571,10 @@ Z_SYSCALL_HANDLER(k_thread_create,
 	/* Verify that the stack size passed in is OK by computing the total
 	 * size and comparing it with the size value in the object metadata
 	 */
-	Z_OOPS(Z_SYSCALL_VERIFY_MSG(!__builtin_uadd_overflow(K_THREAD_STACK_RESERVED,
-							     stack_size,
-							     &total_size),
-				    "stack size overflow (%u+%u)", stack_size,
+	Z_OOPS(Z_SYSCALL_VERIFY_MSG(!u32_add_overflow(K_THREAD_STACK_RESERVED,
+						      stack_size, &total_size),
+				    "stack size overflow (%u+%u)",
+				    (unsigned int) stack_size,
 				    K_THREAD_STACK_RESERVED));
 
 	/* Testing less-than-or-equal since additional room may have been
@@ -487,17 +583,6 @@ Z_SYSCALL_HANDLER(k_thread_create,
 	Z_OOPS(Z_SYSCALL_VERIFY_MSG(total_size <= stack_object->data,
 				    "stack size %u is too big, max is %u",
 				    total_size, stack_object->data));
-
-	/* Verify the struct containing args 6-10 */
-	Z_OOPS(Z_SYSCALL_MEMORY_READ(margs, sizeof(*margs)));
-
-	/* Stash struct arguments in local variables to prevent switcheroo
-	 * attacks
-	 */
-	prio = margs->arg8;
-	options = margs->arg9;
-	delay = margs->arg10;
-	compiler_barrier();
 
 	/* User threads may only create other user threads and they can't
 	 * be marked as essential
@@ -512,17 +597,16 @@ Z_SYSCALL_HANDLER(k_thread_create,
 	Z_OOPS(Z_SYSCALL_VERIFY(z_is_prio_lower_or_equal(prio,
 							_current->base.prio)));
 
-	z_setup_new_thread((struct k_thread *)new_thread, stack, stack_size,
-			  (k_thread_entry_t)entry, (void *)p1,
-			  (void *)margs->arg6, (void *)margs->arg7, prio,
-			  options, NULL);
+	z_setup_new_thread(new_thread, stack, stack_size,
+			   entry, p1, p2, p3, prio, options, NULL);
 
 	if (delay != K_FOREVER) {
 		schedule_new_thread(new_thread, delay);
 	}
 
-	return new_thread_p;
+	return new_thread;
 }
+#include <syscalls/k_thread_create_mrsh.c>
 #endif /* CONFIG_USERSPACE */
 #endif /* CONFIG_MULTITHREADING */
 
@@ -551,7 +635,12 @@ void z_impl_k_thread_suspend(struct k_thread *thread)
 }
 
 #ifdef CONFIG_USERSPACE
-Z_SYSCALL_HANDLER1_SIMPLE_VOID(k_thread_suspend, K_OBJ_THREAD, k_tid_t);
+static inline void z_vrfy_k_thread_suspend(struct k_thread *thread)
+{
+	Z_OOPS(Z_SYSCALL_OBJ(thread, K_OBJ_THREAD));
+	z_impl_k_thread_suspend(thread);
+}
+#include <syscalls/k_thread_suspend_mrsh.c>
 #endif
 
 void z_thread_single_resume(struct k_thread *thread)
@@ -571,7 +660,12 @@ void z_impl_k_thread_resume(struct k_thread *thread)
 }
 
 #ifdef CONFIG_USERSPACE
-Z_SYSCALL_HANDLER1_SIMPLE_VOID(k_thread_resume, K_OBJ_THREAD, k_tid_t);
+static inline void z_vrfy_k_thread_resume(struct k_thread *thread)
+{
+	Z_OOPS(Z_SYSCALL_OBJ(thread, K_OBJ_THREAD));
+	z_impl_k_thread_resume(thread);
+}
+#include <syscalls/k_thread_resume_mrsh.c>
 #endif
 
 void z_thread_single_abort(struct k_thread *thread)
@@ -613,16 +707,10 @@ void z_thread_single_abort(struct k_thread *thread)
 
 #ifdef CONFIG_MULTITHREADING
 #ifdef CONFIG_USERSPACE
-extern char __object_access_start[];
-extern char __object_access_end[];
 
 static void grant_static_access(void)
 {
-	struct _k_object_assignment *pos;
-
-	for (pos = (struct _k_object_assignment *)__object_access_start;
-	     pos < (struct _k_object_assignment *)__object_access_end;
-	     pos++) {
+	Z_STRUCT_SECTION_FOREACH(_k_object_assignment, pos) {
 		for (int i = 0; pos->objects[i] != NULL; i++) {
 			k_object_access_grant(pos->objects[i],
 					      pos->thread);
@@ -686,6 +774,10 @@ void z_init_thread_base(struct _thread_base *thread_base, int priority,
 
 	thread_base->sched_locked = 0U;
 
+#ifdef CONFIG_SMP
+	thread_base->is_idle = 0;
+#endif
+
 	/* swap_data does not need to be initialized */
 
 	z_init_thread_timeout(thread_base);
@@ -716,8 +808,10 @@ FUNC_NORETURN void k_thread_user_mode_enter(k_thread_entry_t entry,
 #ifdef SPIN_VALIDATE
 bool z_spin_lock_valid(struct k_spinlock *l)
 {
-	if (l->thread_cpu) {
-		if ((l->thread_cpu & 3) == _current_cpu->id) {
+	uintptr_t thread_cpu = l->thread_cpu;
+
+	if (thread_cpu) {
+		if ((thread_cpu & 3) == _current_cpu->id) {
 			return false;
 		}
 	}
@@ -726,7 +820,7 @@ bool z_spin_lock_valid(struct k_spinlock *l)
 
 bool z_spin_unlock_valid(struct k_spinlock *l)
 {
-	if (l->thread_cpu != (_current_cpu->id | (u32_t)_current)) {
+	if (l->thread_cpu != (_current_cpu->id | (uintptr_t)_current)) {
 		return false;
 	}
 	l->thread_cpu = 0;
@@ -735,7 +829,36 @@ bool z_spin_unlock_valid(struct k_spinlock *l)
 
 void z_spin_lock_set_owner(struct k_spinlock *l)
 {
-	l->thread_cpu = _current_cpu->id | (u32_t)_current;
+	l->thread_cpu = _current_cpu->id | (uintptr_t)_current;
 }
 
 #endif
+
+int z_impl_k_float_disable(struct k_thread *thread)
+{
+#if defined(CONFIG_FLOAT) && defined(CONFIG_FP_SHARING)
+	return z_arch_float_disable(thread);
+#else
+	return -ENOSYS;
+#endif /* CONFIG_FLOAT && CONFIG_FP_SHARING */
+}
+
+#ifdef CONFIG_USERSPACE
+static inline int z_vrfy_k_float_disable(struct k_thread *thread)
+{
+	Z_OOPS(Z_SYSCALL_OBJ(thread, K_OBJ_THREAD));
+	return z_impl_k_float_disable(thread);
+}
+#include <syscalls/k_float_disable_mrsh.c>
+
+static inline void z_vrfy_k_thread_abort(k_tid_t thread)
+{
+	Z_OOPS(Z_SYSCALL_OBJ(thread, K_OBJ_THREAD));
+	Z_OOPS(Z_SYSCALL_VERIFY_MSG(!(thread->base.user_options & K_ESSENTIAL),
+				    "aborting essential thread %p", thread));
+
+	z_impl_k_thread_abort((struct k_thread *)thread);
+}
+#include <syscalls/k_thread_abort_mrsh.c>
+
+#endif /* CONFIG_USERSPACE */

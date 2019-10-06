@@ -12,9 +12,6 @@
 #include <stdbool.h>
 #include <spinlock.h>
 
-extern struct k_timer _k_timer_list_start[];
-extern struct k_timer _k_timer_list_end[];
-
 static struct k_spinlock lock;
 
 #ifdef CONFIG_OBJECT_TRACING
@@ -28,9 +25,7 @@ static int init_timer_module(struct device *dev)
 {
 	ARG_UNUSED(dev);
 
-	struct k_timer *timer;
-
-	for (timer = _k_timer_list_start; timer < _k_timer_list_end; timer++) {
+	Z_STRUCT_SECTION_FOREACH(k_timer, timer) {
 		SYS_TRACING_OBJ_INIT(k_timer, timer);
 	}
 	return 0;
@@ -87,7 +82,7 @@ void z_timer_expiration_handler(struct _timeout *t)
 
 	z_ready_thread(thread);
 
-	z_set_thread_return_value(thread, 0);
+	z_arch_thread_return_value_set(thread, 0);
 }
 
 
@@ -100,7 +95,7 @@ void k_timer_init(struct k_timer *timer,
 	timer->status = 0U;
 
 	z_waitq_init(&timer->wait_q);
-	z_init_timeout(&timer->timeout, z_timer_expiration_handler);
+	z_init_timeout(&timer->timeout);
 	SYS_TRACING_OBJ_INIT(k_timer, timer);
 
 	timer->user_data = NULL;
@@ -127,19 +122,15 @@ void z_impl_k_timer_start(struct k_timer *timer, s32_t duration, s32_t period)
 }
 
 #ifdef CONFIG_USERSPACE
-Z_SYSCALL_HANDLER(k_timer_start, timer, duration_p, period_p)
+static inline void z_vrfy_k_timer_start(struct k_timer *timer,
+					s32_t duration, s32_t period)
 {
-	s32_t duration, period;
-
-	duration = (s32_t)duration_p;
-	period = (s32_t)period_p;
-
 	Z_OOPS(Z_SYSCALL_VERIFY(duration >= 0 && period >= 0 &&
 				(duration != 0 || period != 0)));
 	Z_OOPS(Z_SYSCALL_OBJ(timer, K_OBJ_TIMER));
-	z_impl_k_timer_start((struct k_timer *)timer, duration, period);
-	return 0;
+	z_impl_k_timer_start(timer, duration, period);
 }
+#include <syscalls/k_timer_start_mrsh.c>
 #endif
 
 void z_impl_k_timer_stop(struct k_timer *timer)
@@ -163,7 +154,12 @@ void z_impl_k_timer_stop(struct k_timer *timer)
 }
 
 #ifdef CONFIG_USERSPACE
-Z_SYSCALL_HANDLER1_SIMPLE_VOID(k_timer_stop, K_OBJ_TIMER, struct k_timer *);
+static inline void z_vrfy_k_timer_stop(struct k_timer *timer)
+{
+	Z_OOPS(Z_SYSCALL_OBJ(timer, K_OBJ_TIMER));
+	z_impl_k_timer_stop(timer);
+}
+#include <syscalls/k_timer_stop_mrsh.c>
 #endif
 
 u32_t z_impl_k_timer_status_get(struct k_timer *timer)
@@ -178,12 +174,17 @@ u32_t z_impl_k_timer_status_get(struct k_timer *timer)
 }
 
 #ifdef CONFIG_USERSPACE
-Z_SYSCALL_HANDLER1_SIMPLE(k_timer_status_get, K_OBJ_TIMER, struct k_timer *);
+static inline u32_t z_vrfy_k_timer_status_get(struct k_timer *timer)
+{
+	Z_OOPS(Z_SYSCALL_OBJ(timer, K_OBJ_TIMER));
+	return z_impl_k_timer_status_get(timer);
+}
+#include <syscalls/k_timer_status_get_mrsh.c>
 #endif
 
 u32_t z_impl_k_timer_status_sync(struct k_timer *timer)
 {
-	__ASSERT(!z_is_in_isr(), "");
+	__ASSERT(!z_arch_is_in_isr(), "");
 
 	k_spinlock_key_t key = k_spin_lock(&lock);
 	u32_t result = timer->status;
@@ -210,17 +211,33 @@ u32_t z_impl_k_timer_status_sync(struct k_timer *timer)
 }
 
 #ifdef CONFIG_USERSPACE
-Z_SYSCALL_HANDLER1_SIMPLE(k_timer_status_sync, K_OBJ_TIMER, struct k_timer *);
-#endif
-
-#ifdef CONFIG_USERSPACE
-Z_SYSCALL_HANDLER1_SIMPLE(k_timer_remaining_get, K_OBJ_TIMER, struct k_timer *);
-Z_SYSCALL_HANDLER1_SIMPLE(k_timer_user_data_get, K_OBJ_TIMER, struct k_timer *);
-
-Z_SYSCALL_HANDLER(k_timer_user_data_set, timer, user_data)
+static inline u32_t z_vrfy_k_timer_status_sync(struct k_timer *timer)
 {
 	Z_OOPS(Z_SYSCALL_OBJ(timer, K_OBJ_TIMER));
-	z_impl_k_timer_user_data_set((struct k_timer *)timer, (void *)user_data);
-	return 0;
+	return z_impl_k_timer_status_sync(timer);
 }
+#include <syscalls/k_timer_status_sync_mrsh.c>
+
+static inline u32_t z_vrfy_k_timer_remaining_get(struct k_timer *timer)
+{
+	Z_OOPS(Z_SYSCALL_OBJ(timer, K_OBJ_TIMER));
+	return z_impl_k_timer_remaining_get(timer);
+}
+#include <syscalls/k_timer_remaining_get_mrsh.c>
+
+static inline void *z_vrfy_k_timer_user_data_get(struct k_timer *timer)
+{
+	Z_OOPS(Z_SYSCALL_OBJ(timer, K_OBJ_TIMER));
+	return z_impl_k_timer_user_data_get(timer);
+}
+#include <syscalls/k_timer_user_data_get_mrsh.c>
+
+static inline void z_vrfy_k_timer_user_data_set(struct k_timer *timer,
+						void *user_data)
+{
+	Z_OOPS(Z_SYSCALL_OBJ(timer, K_OBJ_TIMER));
+	z_impl_k_timer_user_data_set(timer, user_data);
+}
+#include <syscalls/k_timer_user_data_set_mrsh.c>
+
 #endif

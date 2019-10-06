@@ -33,7 +33,7 @@
 
 #define THREAD_STACK		(384 + CONFIG_TEST_EXTRA_STACKSIZE)
 
-#define TEST_TICKS_TO_SLEEP	50
+#define TEST_TICKS_TO_SLEEP	(CONFIG_SYS_CLOCK_TICKS_PER_SEC / 2)
 
 /* Helper thread data */
 static K_THREAD_STACK_DEFINE(helper_tstack, THREAD_STACK);
@@ -137,6 +137,6 @@ static void test_early_sleep(void)
 void test_main(void)
 {
 	ztest_test_suite(test_earlysleep,
-			ztest_unit_test(test_early_sleep));
+			ztest_1cpu_unit_test(test_early_sleep));
 	ztest_run_test_suite(test_earlysleep);
 }

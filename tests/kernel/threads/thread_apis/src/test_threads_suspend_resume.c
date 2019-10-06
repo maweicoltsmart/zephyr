@@ -6,11 +6,9 @@
 
 #include <ztest.h>
 
-#define STACK_SIZE (512 + CONFIG_TEST_EXTRA_STACKSIZE)
+#include "tests_thread_apis.h"
 
-K_THREAD_STACK_EXTERN(tstack);
-extern struct k_thread tdata;
-static int last_prio;
+static ZTEST_BMEM int last_prio;
 
 static void thread_entry(void *p1, void *p2, void *p3)
 {
@@ -19,8 +17,6 @@ static void thread_entry(void *p1, void *p2, void *p3)
 
 static void threads_suspend_resume(int prio)
 {
-	int old_prio = k_thread_priority_get(k_current_get());
-
 	/* set current thread */
 	last_prio = prio;
 	k_thread_priority_set(k_current_get(), last_prio);
@@ -30,7 +26,7 @@ static void threads_suspend_resume(int prio)
 
 	k_tid_t tid = k_thread_create(&tdata, tstack, STACK_SIZE,
 				      thread_entry, NULL, NULL, NULL,
-				      create_prio, 0, 0);
+				      create_prio, K_USER, 0);
 	/* checkpoint: suspend current thread */
 	k_thread_suspend(tid);
 	k_sleep(100);
@@ -40,11 +36,6 @@ static void threads_suspend_resume(int prio)
 	k_sleep(100);
 	/* checkpoint: created thread should be executed after resume */
 	zassert_true(last_prio == create_prio, NULL);
-
-	k_thread_abort(tid);
-
-	/* restore environment */
-	k_thread_priority_set(k_current_get(), old_prio);
 }
 
 /*test cases*/

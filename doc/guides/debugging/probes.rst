@@ -55,6 +55,8 @@ This probe is realized by programming the LPC-Link2 microcontroller with J-Link
 LPC-Link2 firmware. Download and install `LPCScrypt`_ to get the firmware and
 programming scripts.
 
+.. note:: Verify the firmware supports your board by visiting `Firmware for LPCXpresso`_
+
 1. Put the LPC-Link2 microcontroller into DFU boot mode by attaching the DFU
    jumper, then powering up the board.
 
@@ -196,7 +198,7 @@ application ``CMakeList.txt`` file.
 
      set(ZEPHYR_BOARD_FLASH_RUNNER jlink)
 
-If you use West (Zephyr’s meta-tool) you can modify the default runner using
+If you use West (Zephyr's meta-tool) you can modify the default runner using
 the ``--runner`` (or ``-r``) option.
 
   .. code-block:: console
@@ -250,6 +252,9 @@ Install the debug host tools before you program the firmware.
 
 .. _LPCScrypt:
    https://www.nxp.com/lpcscrypt
+
+.. _Firmware for LPCXpresso:
+   https://www.segger.com/products/debug-probes/j-link/models/other-j-links/lpcxpresso-on-board/
 
 .. _OpenSDA DAPLink Board-Specific Firmwares:
    https://www.nxp.com/opensda

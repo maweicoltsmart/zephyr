@@ -35,6 +35,13 @@
 		};
 	};
 
+	pwmleds {
+		compatible = "pwm-leds";
+		pwm_led0: pwm_led_0 {
+			pwms = <&pwm0 2>;
+		};
+	};
+
 	buttons {
 		compatible = "gpio-keys";
 		button0: button_0 {
@@ -61,6 +68,7 @@
 		led1 = &led1;
 		led2 = &led2;
 		led3 = &led3;
+		pwm-led0 = &pwm_led0;
 		sw0 = &button2;
 		sw1 = &button3;
 		sw2 = &button0;
@@ -69,19 +77,19 @@
 };
 
 &adc {
-	status ="ok";
+	status = "okay";
 };
 
 &gpiote {
-	status = "ok";
+	status = "okay";
 };
 
 &gpio0 {
-	status = "ok";
+	status = "okay";
 };
 
 &uart0 {
-	status = "ok";
+	status = "okay";
 	current-speed = <115200>;
 	tx-pin = <29>;
 	rx-pin = <28>;
@@ -90,7 +98,7 @@
 };
 
 &uart1 {
-	status = "ok";
+	status = "okay";
 	current-speed = <115200>;
 	tx-pin = <1>;
 	rx-pin = <0>;
@@ -98,34 +106,41 @@
 	cts-pin = <15>;
 };
 
+&uart2 {
+	tx-pin = <24>;
+	rx-pin = <23>;
+};
+
 &i2c2 {
-	status = "ok";
+	compatible = "nordic,nrf-twim";
+	status = "okay";
 	sda-pin = <30>;
 	scl-pin = <31>;
 };
 
 &pwm0 {
-	status = "ok";
+	status = "okay";
 	ch0-pin = <2>;
 };
 
 &spi3 {
-	status = "ok";
+	compatible = "nordic,nrf-spim";
+	status = "okay";
 	sck-pin = <19>;
 	mosi-pin = <18>;
 	miso-pin = <17>;
 };
 
 &timer0 {
-	status = "ok";
+	status = "okay";
 };
 
 &timer1 {
-	status = "ok";
+	status = "okay";
 };
 
 &timer2 {
-	status = "ok";
+	status = "okay";
 };
 
 &flash0 {
@@ -168,13 +183,11 @@
 / {
 	/* SRAM allocated and used by the BSD library */
 	sram0_bsd: memory@20010000 {
-		device_type = "memory";
 		compatible = "mmio-sram";
 	};
 
 	/* SRAM allocated to the Non-Secure image */
 	sram0_ns: memory@20020000 {
-		device_type = "memory";
 		compatible = "mmio-sram";
 	};
 };

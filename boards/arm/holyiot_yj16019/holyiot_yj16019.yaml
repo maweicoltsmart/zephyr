@@ -8,9 +8,7 @@ toolchain:
   - xtools
 supported:
   - ble
-  - ieee802154
   - pwm
   - watchdog
-  - counter
 ram: 64
 flash: 512

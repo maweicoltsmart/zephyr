@@ -16,7 +16,7 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 #include <errno.h>
 #include <stddef.h>
 #include <string.h>
-#include <misc/byteorder.h>
+#include <sys/byteorder.h>
 
 #include <net/buf.h>
 
@@ -759,6 +759,12 @@ size_t net_buf_append_bytes(struct net_buf *buf, size_t len,
 #define NET_BUF_SIMPLE_INFO(fmt, ...)
 #define NET_BUF_SIMPLE_ASSERT(cond)
 #endif /* CONFIG_NET_BUF_SIMPLE_LOG */
+
+void net_buf_simple_clone(const struct net_buf_simple *original,
+			  struct net_buf_simple *clone)
+{
+	memcpy(clone, original, sizeof(struct net_buf_simple));
+}
 
 void *net_buf_simple_add(struct net_buf_simple *buf, size_t len)
 {

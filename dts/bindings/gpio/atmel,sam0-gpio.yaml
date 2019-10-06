@@ -1,31 +1,22 @@
----
 title: Atmel SAM0 GPIO PORT driver
-version: 0.1
 
 description: >
     This is a representation of the SAM0 GPIO PORT nodes
 
-properties:
-    compatible:
-      type: string
-      category: required
-      description: compatible strings
-      constraint: "atmel,sam0-gpio"
-      generation: define
+compatible: "atmel,sam0-gpio"
 
+include: [gpio-controller.yaml, base.yaml]
+
+properties:
     reg:
-      type: int
-      description: mmio register space
-      generation: define
-      category: required
+      required: true
 
     label:
-      type: string
-      category: required
-      description: Human readable string describing the device (used by Zephyr for API name)
-      generation: define
+      required: true
 
-"#cells":
+    "#gpio-cells":
+      const: 2
+
+gpio-cells:
   - pin
   - flags
-...

@@ -229,6 +229,11 @@ what build or test failed click on the row that contains the failed (i.e.
 non-green) build and then click on the "Tests" tab to see the console output
 messages indicating the failure.
 
+The `builds@lists.zephyrproject.org mailing list
+<https://lists.zephyrproject.org/g/builds>`_
+archives the CI (shippable) nightly build results.
+
+
  .. _Contribution Tools:
 
 Contribution Tools and Git Setup
@@ -292,7 +297,8 @@ uncrustify
 ==========
 
 The `uncrustify tool <https://sourceforge.net/projects/uncrustify>`_ can
-be helpful to quickly reformat your source code to our `Coding Style`_
+be helpful to quickly reformat large amounts of new source code to our
+`Coding Style`_
 standards together with a configuration file we've provided:
 
 .. code-block:: bash
@@ -301,6 +307,10 @@ standards together with a configuration file we've provided:
    uncrustify --replace --no-backup -l C -c $ZEPHYR_BASE/.uncrustify.cfg my_source_file.c
    # On Windows
    uncrustify --replace --no-backup -l C -c %ZEPHYR_BASE%\.uncrustify.cfg my_source_file.c
+
+But note that you should not use uncrustify to reformat existing Zephyr code,
+or to modify files in which you only introduce a small fix. This would create a
+lot of unwelcome extra changed lines.
 
 On Linux systems, you can install uncrustify with
 
@@ -323,9 +333,9 @@ project's style and naming conventions.
 In general, follow the `Linux kernel coding style`_, with the
 following exceptions:
 
-* Add braces to every ``if`` and ``else`` body, even for single-line code
-  blocks. Use the ``--ignore BRACES`` flag to make *checkpatch* stop
-  complaining.
+* Add braces to every ``if``, ``else``, ``do``, ``while``, ``for`` and
+  ``switch`` body, even for single-line code blocks. Use the ``--ignore BRACES``
+  flag to make *checkpatch* stop complaining.
 * Use spaces instead of tabs to align comments after declarations, as needed.
 * Use C89-style single line comments, ``/*  */``. The C99-style single line
   comment, ``//``, is not allowed.
@@ -539,6 +549,13 @@ workflow here:
    to fix the issues and amend your commits by rebasing as described above.
    Additional information about the CI system can be found in
    `Continuous Integration`_.
+
+Contributions to External Modules
+**********************************
+
+Follow the guidelines in the :ref:`modules` section for contributing
+:ref:`new modules <submitting_new_modules>` and
+submitting changes to :ref:`existing modules <changes_to_existing_module>`.
 
 Commit Guidelines
 *****************

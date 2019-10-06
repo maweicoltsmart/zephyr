@@ -10,7 +10,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <kernel.h>
-#include <misc/byteorder.h>
+#include <sys/byteorder.h>
 #include <usb/usb_device.h>
 #include <device.h>
 
@@ -361,7 +361,7 @@ int usb_dc_ep_configure(const struct usb_dc_ep_cfg_data * const cfg)
 	(void)memset(&bdt[idx_even], 0, sizeof(struct buf_descriptor));
 	(void)memset(&bdt[idx_odd], 0, sizeof(struct buf_descriptor));
 
-	if (k_mem_pool_alloc(&ep_buf_pool, block, cfg->ep_mps * 2U, 10) == 0) {
+	if (k_mem_pool_alloc(&ep_buf_pool, block, cfg->ep_mps * 2U, K_MSEC(10)) == 0) {
 		(void)memset(block->data, 0, cfg->ep_mps * 2U);
 	} else {
 		LOG_ERR("Memory allocation time-out");

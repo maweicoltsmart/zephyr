@@ -8,7 +8,8 @@
 #include <zephyr.h>
 #include <init.h>
 #include <errno.h>
-#include <misc/mempool.h>
+#include <sys/math_extras.h>
+#include <sys/mempool.h>
 #include <string.h>
 #include <app_memory/app_memdomain.h>
 
@@ -66,23 +67,11 @@ void free(void *ptr)
 	sys_mem_pool_free(ptr);
 }
 
-static bool size_t_mul_overflow(size_t a, size_t b, size_t *res)
-{
-#if __SIZEOF_SIZE_T__ == 4
-	return __builtin_umul_overflow((unsigned int)a, (unsigned int)b,
-				       (unsigned int *)res);
-#else /* __SIZEOF_SIZE_T__ == 8 */
-	return __builtin_umulll_overflow((unsigned long long)a,
-					 (unsigned long long)b,
-					 (unsigned long long *)res);
-#endif
-}
-
 void *calloc(size_t nmemb, size_t size)
 {
 	void *ret;
 
-	if (size_t_mul_overflow(nmemb, size, &size)) {
+	if (size_mul_overflow(nmemb, size, &size)) {
 		errno = ENOMEM;
 		return NULL;
 	}
@@ -98,35 +87,21 @@ void *calloc(size_t nmemb, size_t size)
 
 void *realloc(void *ptr, size_t requested_size)
 {
-	struct sys_mem_pool_block *blk;
-	size_t block_size, total_requested_size;
 	void *new_ptr;
+	size_t copy_size;
 
 	if (ptr == NULL) {
 		return malloc(requested_size);
 	}
 
 	if (requested_size == 0) {
+		free(ptr);
 		return NULL;
 	}
 
-	/* Stored right before the pointer passed to the user */
-	blk = (struct sys_mem_pool_block *)((char *)ptr - sizeof(*blk));
-
-	/* Determine size of previously allocated block by its level.
-	 * Most likely a bit larger than the original allocation
-	 */
-	block_size = _ALIGN4(blk->pool->base.max_sz);
-	for (int i = 1; i <= blk->level; i++) {
-		block_size = _ALIGN4(block_size / 4);
-	}
-
-	/* We really need this much memory */
-	total_requested_size = requested_size +
-		sizeof(struct sys_mem_pool_block);
-
-	if (block_size >= total_requested_size) {
-		/* Existing block large enough, nothing to do */
+	copy_size = sys_mem_pool_try_expand_inplace(ptr, requested_size);
+	if (copy_size == 0) {
+		/* Existing block large enough, nothing else to do */
 		return ptr;
 	}
 
@@ -135,7 +110,7 @@ void *realloc(void *ptr, size_t requested_size)
 		return NULL;
 	}
 
-	memcpy(new_ptr, ptr, block_size - sizeof(struct sys_mem_pool_block));
+	memcpy(new_ptr, ptr, copy_size);
 	free(ptr);
 
 	return new_ptr;
@@ -144,7 +119,7 @@ void *realloc(void *ptr, size_t requested_size)
 
 void *reallocarray(void *ptr, size_t nmemb, size_t size)
 {
-	if (size_t_mul_overflow(nmemb, size, &size)) {
+	if (size_mul_overflow(nmemb, size, &size)) {
 		errno = ENOMEM;
 		return NULL;
 	}

@@ -5,9 +5,9 @@
  */
 
 #include <ztest.h>
-#include <power.h>
+#include <power/power.h>
 #include <irq_offload.h>
-#include <misc/stack.h>
+#include <debug/stack.h>
 
 #define SLEEP_MS 100
 #define NUM_OF_WORK 2
@@ -131,7 +131,7 @@ void test_main(void)
 {
 	ztest_test_suite(profiling_api,
 			 ztest_unit_test(test_call_stacks_analyze_main),
-			 ztest_unit_test(test_call_stacks_analyze_idle),
-			 ztest_unit_test(test_call_stacks_analyze_workq));
+			 ztest_1cpu_unit_test(test_call_stacks_analyze_idle),
+			 ztest_1cpu_unit_test(test_call_stacks_analyze_workq));
 	ztest_run_test_suite(profiling_api);
 }

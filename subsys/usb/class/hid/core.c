@@ -11,7 +11,7 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(usb_hid);
 
-#include <misc/byteorder.h>
+#include <sys/byteorder.h>
 #include <usb_device.h>
 #include <usb_common.h>
 
@@ -631,7 +631,7 @@ static void hid_interface_config(struct usb_desc_header *head,
 }
 
 #define DEFINE_HID_CFG_DATA(x, _)					\
-	USBD_CFG_DATA_DEFINE(hid)					\
+	USBD_CFG_DATA_DEFINE(primary, hid)				\
 	struct usb_cfg_data hid_config_##x = {				\
 		.usb_device_description = NULL,				\
 		.interface_config = hid_interface_config,		\
@@ -640,15 +640,10 @@ static void hid_interface_config(struct usb_desc_header *head,
 		.interface = {						\
 			.class_handler = hid_class_handle_req,		\
 			.custom_handler = hid_custom_handle_req,	\
-			.payload_data = NULL,				\
 		},							\
 		.num_endpoints = ARRAY_SIZE(hid_ep_data_##x),		\
 		.endpoint = hid_ep_data_##x,				\
 	};
-
-#if !defined(CONFIG_USB_COMPOSITE_DEVICE)
-static u8_t interface_data[CONFIG_USB_HID_MAX_PAYLOAD_SIZE];
-#endif
 
 int usb_hid_init(const struct device *dev)
 {
@@ -661,27 +656,6 @@ int usb_hid_init(const struct device *dev)
 	 * Modify Report Descriptor Size
 	 */
 	usb_set_hid_report_size(cfg, dev_data->report_size);
-
-#ifndef CONFIG_USB_COMPOSITE_DEVICE
-	int ret;
-
-	cfg->interface.payload_data = interface_data;
-	cfg->usb_device_description = usb_get_device_descriptor();
-
-	/* Initialize the USB driver with the right configuration */
-	ret = usb_set_config(cfg);
-	if (ret < 0) {
-		LOG_ERR("Failed to config USB");
-		return ret;
-	}
-
-	/* Enable USB driver */
-	ret = usb_enable(cfg);
-	if (ret < 0) {
-		LOG_ERR("Failed to enable USB");
-		return ret;
-	}
-#endif
 
 	return 0;
 }

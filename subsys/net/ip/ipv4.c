@@ -97,20 +97,6 @@ int net_ipv4_finalize(struct net_pkt *pkt, u8_t next_header_proto)
 	return 0;
 }
 
-const struct in_addr *net_ipv4_unspecified_address(void)
-{
-	static const struct in_addr addr;
-
-	return &addr;
-}
-
-const struct in_addr *net_ipv4_broadcast_address(void)
-{
-	static const struct in_addr addr = { { { 255, 255, 255, 255 } } };
-
-	return &addr;
-}
-
 enum net_verdict net_ipv4_input(struct net_pkt *pkt)
 {
 	NET_PKT_DATA_ACCESS_CONTIGUOUS_DEFINE(ipv4_access, struct net_ipv4_hdr);
@@ -150,12 +136,17 @@ enum net_verdict net_ipv4_input(struct net_pkt *pkt)
 	}
 
 	if (net_ipv4_is_addr_mcast(&hdr->src)) {
-		NET_DBG("DROP: src addr is mcast");
+		NET_DBG("DROP: src addr is %s", "mcast");
 		goto drop;
 	}
 
 	if (net_ipv4_is_addr_bcast(net_pkt_iface(pkt), &hdr->src)) {
-		NET_DBG("DROP: src addr is bcast");
+		NET_DBG("DROP: src addr is %s", "bcast");
+		goto drop;
+	}
+
+	if (net_ipv4_is_addr_unspecified(&hdr->src)) {
+		NET_DBG("DROP: src addr is %s", "unspecified");
 		goto drop;
 	}
 
@@ -166,12 +157,15 @@ enum net_verdict net_ipv4_input(struct net_pkt *pkt)
 	}
 
 	if ((!net_ipv4_is_my_addr(&hdr->dst) &&
-	    !net_ipv4_is_addr_mcast(&hdr->dst)) ||
-	    ((hdr->proto == IPPROTO_UDP &&
-	      net_ipv4_addr_cmp(&hdr->dst, net_ipv4_broadcast_address()) &&
-	      !IS_ENABLED(CONFIG_NET_DHCPV4)) ||
-	     (hdr->proto == IPPROTO_TCP &&
-	      net_ipv4_is_addr_bcast(net_pkt_iface(pkt), &hdr->dst)))) {
+	     !net_ipv4_is_addr_mcast(&hdr->dst) &&
+	     !(hdr->proto == IPPROTO_UDP &&
+	       (net_ipv4_addr_cmp(&hdr->dst, net_ipv4_broadcast_address()) ||
+		/* RFC 1122 ch. 3.3.6 The 0.0.0.0 is non-standard bcast addr */
+		(IS_ENABLED(CONFIG_NET_IPV4_ACCEPT_ZERO_BROADCAST) &&
+		 net_ipv4_addr_cmp(&hdr->dst,
+				   net_ipv4_unspecified_address()))))) ||
+	    (hdr->proto == IPPROTO_TCP &&
+	     net_ipv4_is_addr_bcast(net_pkt_iface(pkt), &hdr->dst))) {
 		NET_DBG("DROP: not for me");
 		goto drop;
 	}

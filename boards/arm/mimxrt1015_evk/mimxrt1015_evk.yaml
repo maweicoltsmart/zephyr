@@ -12,8 +12,9 @@ toolchain:
   - zephyr
   - gnuarmemb
   - xtools
-ram: 128
+ram: 32
 flash: 16384
 supported:
   - i2c
   - hwinfo
+  - counter

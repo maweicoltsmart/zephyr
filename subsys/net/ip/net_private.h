@@ -11,7 +11,7 @@
  */
 
 #include <errno.h>
-#include <misc/printk.h>
+#include <sys/printk.h>
 #include <net/net_context.h>
 #include <net/net_pkt.h>
 
@@ -38,15 +38,42 @@
 
 #include "connection.h"
 
-extern void net_pkt_init(void);
 extern void net_if_init(void);
 extern void net_if_post_init(void);
 extern void net_if_carrier_down(struct net_if *iface);
+
+#if defined(CONFIG_NET_NATIVE) || defined(CONFIG_NET_OFFLOAD)
 extern void net_context_init(void);
-enum net_verdict net_ipv4_input(struct net_pkt *pkt);
-enum net_verdict net_ipv6_input(struct net_pkt *pkt, bool is_loopback);
+extern void net_pkt_init(void);
 extern void net_tc_tx_init(void);
 extern void net_tc_rx_init(void);
+#else
+static inline void net_context_init(void) { }
+static inline void net_pkt_init(void) { }
+static inline void net_tc_tx_init(void) { }
+static inline void net_tc_rx_init(void) { }
+#endif
+
+#if defined(CONFIG_NET_NATIVE)
+enum net_verdict net_ipv4_input(struct net_pkt *pkt);
+enum net_verdict net_ipv6_input(struct net_pkt *pkt, bool is_loopback);
+#else
+static inline enum net_verdict net_ipv4_input(struct net_pkt *pkt)
+{
+	ARG_UNUSED(pkt);
+
+	return NET_CONTINUE;
+}
+
+static inline enum net_verdict net_ipv6_input(struct net_pkt *pkt,
+					      bool is_loopback)
+{
+	ARG_UNUSED(pkt);
+	ARG_UNUSED(is_loopback);
+
+	return NET_CONTINUE;
+}
+#endif
 extern void net_tc_submit_to_tx_queue(u8_t tc, struct net_pkt *pkt);
 extern void net_tc_submit_to_rx_queue(u8_t tc, struct net_pkt *pkt);
 extern enum net_verdict net_promisc_mode_input(struct net_pkt *pkt);
@@ -56,6 +83,28 @@ char *net_sprint_addr(sa_family_t af, const void *addr);
 #define net_sprint_ipv4_addr(_addr) net_sprint_addr(AF_INET, _addr)
 
 #define net_sprint_ipv6_addr(_addr) net_sprint_addr(AF_INET6, _addr)
+
+#if defined(CONFIG_NET_CONTEXT_TIMESTAMP)
+int net_context_get_timestamp(struct net_context *context,
+			      struct net_pkt *pkt,
+			      struct net_ptp_time *timestamp);
+#endif
+
+#if defined(CONFIG_COAP)
+/**
+ * @brief CoAP init function declaration. It belongs here because we don't want
+ * to expose it as a public API -- it should only be called once, and only by
+ * net_core.
+ */
+extern void net_coap_init(void);
+#else
+static inline void net_coap_init(void)
+{
+	return;
+}
+#endif
+
+
 
 #if defined(CONFIG_NET_GPTP)
 /**
@@ -73,7 +122,7 @@ void net_gptp_init(void);
 enum net_verdict net_gptp_recv(struct net_if *iface, struct net_pkt *pkt);
 #else
 #define net_gptp_init()
-#define net_gptp_recv(iface, pkt)
+#define net_gptp_recv(iface, pkt) NET_DROP
 #endif /* CONFIG_NET_GPTP */
 
 #if defined(CONFIG_NET_IPV6_FRAGMENT)
@@ -109,6 +158,13 @@ static inline u16_t net_calc_chksum_icmpv4(struct net_pkt *pkt)
 
 static inline u16_t net_calc_chksum_udp(struct net_pkt *pkt)
 {
+	u16_t chksum = net_calc_chksum(pkt, IPPROTO_UDP);
+
+	return chksum == 0U ? 0xffff : chksum;
+}
+
+static inline u16_t net_calc_verify_chksum_udp(struct net_pkt *pkt)
+{
 	return net_calc_chksum(pkt, IPPROTO_UDP);
 }
 
@@ -140,13 +196,16 @@ static inline void net_hexdump(const char *str,
 static inline void net_pkt_hexdump(struct net_pkt *pkt, const char *str)
 {
 	struct net_buf *buf = pkt->buffer;
+	char pkt_str[sizeof("0x") + sizeof(intptr_t) * 2];
 
 	if (str && str[0]) {
 		LOG_DBG("%s", str);
 	}
 
+	snprintk(pkt_str, sizeof(pkt_str), "%p", pkt);
+
 	while (buf) {
-		LOG_HEXDUMP_DBG(buf->data, buf->len, "");
+		LOG_HEXDUMP_DBG(buf->data, buf->len, log_strdup(pkt_str));
 		buf = buf->frags;
 	}
 }

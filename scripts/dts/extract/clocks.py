@@ -4,6 +4,12 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+# NOTE: This file is part of the old device tree scripts, which will be removed
+# later. They are kept to generate some legacy #defines via the
+# --deprecated-only flag.
+#
+# The new scripts are gen_defines.py, edtlib.py, and dtlib.py.
+
 from extract.globals import *
 from extract.directive import DTDirective
 
@@ -16,7 +22,6 @@ from extract.directive import DTDirective
 #
 class DTClocks(DTDirective):
     def _extract_consumer(self, node_path, clocks, def_label):
-        clock_consumer_bindings = get_binding(node_path)
         clock_consumer_label = 'DT_' + node_label(node_path)
 
         clock_index = 0
@@ -41,13 +46,19 @@ class DTClocks(DTDirective):
                                      '#clock-cells', 0))
                 clock_cells_string = clock_provider_bindings.get(
                     'cell_string', 'CLOCK')
-                clock_cells_names = clock_provider_bindings.get(
-                    '#cells', ['ID', 'CELL1',  "CELL2", "CELL3"])
+
+                if "clock-cells" in clock_provider_bindings:
+                    clock_cells_names = clock_provider_bindings["clock-cells"]
+                elif "#cells" in clock_provider_bindings:
+                    clock_cells_names = clock_provider_bindings["#cells"]
+                else:
+                    clock_cells_names = ["ID", "CELL1",  "CELL2", "CELL3"]
+
                 clock_cells = []
             else:
                 clock_cells.append(cell)
             clock_cell_index += 1
-            if clock_cell_index > nr_clock_cells:
+            if clock_cell_index > nr_clock_cells or nr_clock_cells == 0:
                 # clock consumer device - clocks info
                 #####################################
                 prop_def = {}
@@ -121,15 +132,7 @@ class DTClocks(DTDirective):
                 clock_provider_label_str = clock_provider['props'].get('label',
                                                                        None)
                 if clock_provider_label_str is not None:
-                    try:
-                        generation = clock_consumer_bindings['properties'][
-                            'clocks']['generation']
-                    except:
-                        generation = ''
-                    if 'use-prop-name' in generation:
-                        clock_cell_name = 'CLOCKS_CONTROLLER'
-                    else:
-                        clock_cell_name = 'CLOCK_CONTROLLER'
+                    clock_cell_name = 'CLOCK_CONTROLLER'
                     if clock_index == 0 and \
                         len(clocks) == (len(clock_cells) + 1):
                         index = ''
@@ -151,6 +154,39 @@ class DTClocks(DTDirective):
                                     clock_cell_name,
                                     index]),
                             clock_label,
+                            prop_alias)
+
+                # If the provided clock has a fixed rate, extract its frequency
+                # as a macro generated for the clock consumer.
+                if clock_provider['props']['compatible'] == 'fixed-clock':
+                    clock_prop_name = 'clock-frequency'
+                    clock_prop_label = 'CLOCKS_CLOCK_FREQUENCY'
+                    if clock_index == 0 and \
+                        len(clocks) == (len(clock_cells) + 1):
+                        index = ''
+                    else:
+                        index = str(clock_index)
+                    clock_frequency_label = \
+                        self.get_label_string([clock_consumer_label,
+                                               clock_prop_label,
+                                               index])
+
+                    prop_def[clock_frequency_label] = \
+                        clock_provider['props'][clock_prop_name]
+                    add_compat_alias(
+                        node_path,
+                        self.get_label_string([clock_prop_label, index]),
+                        clock_frequency_label,
+                        prop_alias)
+                    if node_path in aliases:
+                        add_prop_aliases(
+                            node_path,
+                            lambda alias:
+                                self.get_label_string([
+                                    alias,
+                                    clock_prop_label,
+                                    index]),
+                            clock_frequency_label,
                             prop_alias)
 
                 insert_defs(node_path, prop_def, prop_alias)
